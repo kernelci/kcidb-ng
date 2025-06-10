@@ -22,6 +22,7 @@ from kcidb import io, db, mq, orm, oo, monitor, tests, unittest, misc # noqa
 import json
 import time
 import logging
+import yaml
 
 # default database
 DATABASE = "postgresql:dbname=kcidb user=kcidb password=kcidb host=localhost port=5432"
@@ -60,8 +61,34 @@ def move_file_to_failed_dir(filename, failed_dir):
         print(f"Error moving file {filename} to failed directory: {e}")
         raise e
 
+TREES_FILE = "/app/trees.yml"
 
-def ingest_submissions(spool_dir, db_client=None):
+def load_trees_name():
+    with open(TREES_FILE, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+
+    trees_name = {
+        v["url"]: tree_name
+        for tree_name, v in data.get("trees", {}).items()
+    }
+
+    return trees_name
+
+
+def standardize_trees_name(input_data, trees_name):
+    """ Standardize tree names in input data using the provided mapping """
+
+    for checkout in input_data.get("checkouts", []):
+        git_url = checkout.get("git_repository_url")
+        if git_url in trees_name:
+            correct_tree = trees_name[git_url]
+            if checkout.get("tree_name") != correct_tree:
+                checkout["tree_name"] = correct_tree
+
+    return input_data
+
+
+def ingest_submissions(spool_dir, trees_name, db_client=None):
     failed_dir = os.path.join(spool_dir, "failed")
     archive_dir = os.path.join(spool_dir, "archive")
     if db_client is None:
@@ -89,6 +116,7 @@ def ingest_submissions(spool_dir, db_client=None):
                     logger.info(f"File size: {fsize}")
                 try:
                     data = json.loads(f.read())
+                    data = standardize_trees_name(data, trees_name)
                     data = io_schema.validate(data)
                     data = io_schema.upgrade(data, copy=False)
                     db_client.load(data)
@@ -147,10 +175,11 @@ def main():
     args = parser.parse_args()
     logger.info("Starting ingestion process...")
     verify_spool_dirs(args.spool_dir)
+    trees_name = load_trees_name()
     get_db_credentials()
     db_client = get_db_client(DATABASE)
     while True:
-        ingest_submissions(args.spool_dir, db_client)
+        ingest_submissions(args.spool_dir, trees_name, db_client)
         time.sleep(1)
 
 if __name__ == "__main__":
