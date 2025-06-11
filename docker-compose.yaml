@@ -47,7 +47,7 @@ services:
       - ./cache:/cache
       - ./state:/app/state
       - ./config:/app/config
-    command: ["python", "/app/logspec_worker.py", "--spool-dir", "/app/spool", "--dry-run"]
+    command: ["python", "/app/logspec_worker.py", "--spool-dir", "/app/spool", "--config-file", "/app/logspec_worker.yaml"]
     restart: unless-stopped
     networks:
       - kcidb
