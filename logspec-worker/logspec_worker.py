@@ -518,7 +518,4 @@ def main():
 
 
 if __name__ == "__main__":
-    while True:
-        main()
-        # sleep for 10 seconds
-        time.sleep(10)
+    main()
