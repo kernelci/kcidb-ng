@@ -1,6 +1,7 @@
-# KCIDB-REST
+# KCIDB-ng
 
-KCIDB-REST is a REST API wrapper around the KernelCI Database (KCIDB). It provides services for submitting kernel test, build, and checkout data to the KCIDB database via HTTP requests.
+KCIDB-ng is fresh rewrite of our wrappers around the KernelCI Database (KCIDB). It provides services for submitting kernel test data to the KCIDB database via HTTP requests, and also
+come with log analysis capabilities.
 
 ## Architecture
 
@@ -38,12 +39,12 @@ The system consists of several interconnected components:
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/kernelci/kcidb-rest.git
-cd kcidb-rest
+git clone https://github.com/kernelci/kcidb-ng.git
+cd kcidb-ng
 ```
 
 ### Quick Start (recommended)
-To quickly start the KCIDB-REST services with a local PostgreSQL database, run:
+To quickly start the KCIDB-ng services with a local PostgreSQL database, run:
 
 ```bash
 ./self-hosted.sh run
@@ -103,7 +104,7 @@ Make sure to provide the appropriate credentials in your `.env` file.
 
 ### Generating tokens
 
-If your kcidb-rest is installed in isolated environment, you can disable JWT authentication by commenting out the JWT command in `docker-compose.yaml`:
+If your kcidb-ng is installed in isolated environment, you can disable JWT authentication by commenting out the JWT command in `docker-compose.yaml`:
 
 ```yaml
 #    command: ["/usr/local/bin/kcidb-restd-rs","-j",""]
