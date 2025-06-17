@@ -1,0 +1,106 @@
+origins:
+  maestro:
+    description: "Public test orchestrator from the KernelCI community"
+    owner: "KernelCI Project"
+    contacts:
+      - kernelci-syadmin@groups.io
+    submits:
+      - checkouts
+      - builds
+      - tests
+
+  arm:
+    description: "Arm device testing in Arm internal lab"
+    owner: "Arm Holdings"
+    contacts:
+      - ManojKumar08@arm.com
+      - cristian.marussi@arm.com
+      - aishwarya.tcv@arm.com
+      - broonie@kernel.org
+    submits:
+      - checkouts
+      - builds
+      - tests
+
+  broonie:
+    description: "Small SoC test system from Mark Brown"
+    owner: "Mark Brown"
+    contacts:
+      - broonie@kernel.org
+    submits:
+      - checkouts
+      - builds
+      - tests
+
+  linaro:
+    description: "LKFT CI system from Linaro"
+    owner: "Linaro Limited"
+    contacts:
+      - tuxsuite@linaro.org
+      - benjamin.copeland@linaro.org
+    submits:
+      - checkouts
+      - builds
+      - tests
+
+  microsoft:
+    description: "Azure Cloud kernel testing through LISA"
+    owner: "Microsoft Corporation"
+    contacts:
+      - Johnson.George@microsoft.com
+      - adityanagesh@microsoft.com
+    submits:
+      - checkouts
+      - builds
+      - tests
+
+  redhat:
+    description: "RedHat CKI test system"
+    owner: "Red Hat, Inc"
+    contacts:
+      - cki-project@redhat.com
+      - tales.aparecida@redhat.com
+    submits:
+      - checkouts
+      - builds
+      - tests
+      - issues
+      - incidents
+
+  riscv:
+    description: "RISC-V community test system"
+    owner: "RISC-V International"
+    contacts:
+      - rafael@riscv.org
+    submits:
+      - tests
+
+
+  syzbot:
+    description: "syzkaller fuzzing results"
+    owner: "syzkaller community"
+    contacts:
+      - dvyukov@google.com
+      - nogikh@google.com
+    submits:
+      - checkouts
+      - builds
+      - tests
+
+  ti:
+    description: "TI's infra to execute hw tests using Maestro builds"
+    owner: "Texas Instruments Incorporated"
+    contacts:
+      - minas@ti.com
+    submits:
+      - tests
+
+  0dayci:
+    description: "Intel's 0-day test results in KernelCI"
+    owner: "Intel Corporation"
+    contacts:
+      - philip.li@intel.com
+    submits:
+      - checkouts
+      - builds
+      - tests
