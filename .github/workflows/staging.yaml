@@ -44,8 +44,10 @@ jobs:
           set -e
           cd /srv/kcidb-ng
           git stash
-          git fetch origin
+          git fetch --all --prune
+          git checkout staging.kernelci.org
           git rebase origin/staging.kernelci.org
           git stash pop
           docker compose --profile self-hosted pull
           docker compose --profile self-hosted up -d --remove-orphans
+
