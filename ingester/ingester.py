@@ -23,6 +23,8 @@ import json
 import time
 import logging
 import yaml
+from concurrent.futures import ProcessPoolExecutor
+import functools
 
 # default database
 DATABASE = "postgresql:dbname=kcidb user=kcidb password=kcidb host=localhost port=5432"
@@ -88,13 +90,62 @@ def standardize_trees_name(input_data, trees_name):
     return input_data
 
 
-def ingest_submissions(spool_dir, trees_name, db_client=None):
+def extract_logspec(input_data):
+    """
+    Extract logspec from builds and tests, if it is large,
+    upload to storage and replace with a reference
+    """
+    return input_data
+
+def process_file(filename, trees_name, db_client, spool_dir):
+    """ Process a single file, standardizing tree names and loading into the database """
     failed_dir = os.path.join(spool_dir, "failed")
     archive_dir = os.path.join(spool_dir, "archive")
+ 
+    full_filename = os.path.join(spool_dir, filename)
+    with open(full_filename, "r") as f:
+        fsize = os.path.getsize(full_filename)
+        if fsize == 0:
+            if VERBOSE:
+                logger.info(f"File {full_filename} is empty, skipping, deleting")
+            os.remove(full_filename)
+            return False
+        start_time = time.time()
+        if VERBOSE:
+            logger.info(f"File size: {fsize}")
+        try:
+            data = json.loads(f.read())
+            data = extract_logspec(data)
+            data = standardize_trees_name(data, trees_name)
+            io_schema = db_client.get_schema()[1]
+            data = io_schema.validate(data)
+            data = io_schema.upgrade(data, copy=False)
+            db_client.load(data)
+        except Exception as e:
+            logger.error(f"Error loading data: {e}")
+            logger.error(f"File: {full_filename}")
+            move_file_to_failed_dir(full_filename, failed_dir)
+            return False
+        ing_speed = fsize / (time.time() - start_time) / 1024
+        if VERBOSE:
+            logger.info(f"Ingested {filename} in {ing_speed} KB/s")
+        # Archive the file
+        try:
+            os.rename(full_filename, os.path.join(archive_dir, filename))
+        except Exception as e:
+            logger.error(f"Error archiving file {filename}: {e}")
+            return False
+
+    return True
+
+
+def ingest_submissions(spool_dir, trees_name, db_client=None):
     if db_client is None:
         raise Exception("db_client is None")
     io_schema = db_client.get_schema()[1]
     # iterate over all files in the directory spool_dir
+    stat_ok = 0
+    stat_fail = 0
     for filename in os.listdir(spool_dir):
         # skip directories
         if os.path.isdir(os.path.join(spool_dir, filename)):
@@ -103,39 +154,16 @@ def ingest_submissions(spool_dir, trees_name, db_client=None):
         if not filename.endswith(".json"):
             continue
         logger.info(f"Ingesting {filename}")
-        try:
-            with open(os.path.join(spool_dir, filename), "r") as f:
-                fsize = os.path.getsize(os.path.join(spool_dir, filename))
-                if fsize == 0:
-                    if VERBOSE:
-                        logger.info(f"File {filename} is empty, skipping, deleting")
-                    os.remove(os.path.join(spool_dir, filename))
-                    continue
-                start_time = time.time()
-                if VERBOSE:
-                    logger.info(f"File size: {fsize}")
-                try:
-                    data = json.loads(f.read())
-                    data = standardize_trees_name(data, trees_name)
-                    data = io_schema.validate(data)
-                    data = io_schema.upgrade(data, copy=False)
-                    db_client.load(data)
-                except Exception as e:
-                    logger.error(f"Error loading data: {e}")
-                    logger.error(f"File: {filename}")
-                    # move the file to the failed directory for later inspection
-                    move_file_to_failed_dir(os.path.join(spool_dir, filename), failed_dir)
-                    continue
-                ing_speed = fsize / (time.time() - start_time) / 1024
-                if VERBOSE:
-                    logger.info(f"Ingested {filename} in {ing_speed} KB/s")
-                # Archive the file
-                os.rename(os.path.join(spool_dir, filename), os.path.join(archive_dir, filename))
+        r = process_file(filename, trees_name, db_client, spool_dir)
+        if r:
+            stat_ok += 1
+        else:
+            stat_fail += 1
+    # iterate over res and print statistics
+    # this also will wait asynchronously for all files to be processed
+    if stat_ok + stat_fail > 0:
+        logger.info(f"Processed {stat_ok + stat_fail} files: {stat_ok} succeeded, {stat_fail} failed")
 
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            logger.error(f"File: {filename}")
-            raise e
 
 def verify_dir(dir):
     if not os.path.exists(dir):
