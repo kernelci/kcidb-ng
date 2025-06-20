@@ -25,10 +25,15 @@ import logging
 import yaml
 from concurrent.futures import ProcessPoolExecutor
 import functools
+import requests
+import hashlib
+import tempfile
 
 # default database
 DATABASE = "postgresql:dbname=kcidb user=kcidb password=kcidb host=localhost port=5432"
 VERBOSE = 0
+STORAGE_TOKEN = os.environ.get("STORAGE_TOKEN", None)
+LOGEXCERPT_THRESHOLD = 256  # 256 bytes threshold for logexcerpt
 
 logger = logging.getLogger('ingester')
 
@@ -90,11 +95,77 @@ def standardize_trees_name(input_data, trees_name):
     return input_data
 
 
-def extract_logspec(input_data):
+def upload_logexcerpt(logexcerpt, id):
     """
-    Extract logspec from builds and tests, if it is large,
+    Upload logexcerpt to storage and return a reference(URL)
+    """
+    STORAGE_BASE_URL = "https://files-staging.kernelci.org"
+    upload_url = f"{STORAGE_BASE_URL}/upload"
+    if VERBOSE:
+        logger.info(f"Uploading logexcerpt for {id} to {upload_url}")
+    # make temporary file with logexcerpt data
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".logexcerpt") as temp_file:
+        logexcerpt_filename = temp_file.name
+        temp_file.write(logexcerpt.encode('utf-8'))
+        temp_file.flush()
+    with open(logexcerpt_filename, "rb") as f:
+        hdr = {
+            "Authorization": f"Bearer {STORAGE_TOKEN}",
+        }
+        files={
+            "file0": ("logexcerpt.txt", f),
+            "path": f"logexcerpt/{id}"
+        }
+        try:
+            r = requests.post(
+                upload_url,
+                headers=hdr,
+                files=files
+            )
+        except Exception as e:
+            logger.error(f"Error uploading logexcerpt for {id}: {e}")
+            os.remove(logexcerpt_filename)
+            return logexcerpt  # Return original logexcerpt if upload fails
+    os.remove(logexcerpt_filename)
+    if r.status_code != 200:
+        logger.error(f"Failed to upload logexcerpt for {id}: {r.status_code} : {r.text}")
+        return logexcerpt  # Return original logexcerpt if upload fails
+
+    return f"{STORAGE_BASE_URL}/logexcerpt/{id}/logexcerpt.txt"
+
+
+def extract_log_excerpt(input_data):
+    """
+    Extract log_excerpt from builds and tests, if it is large,
     upload to storage and replace with a reference
     """
+    if not STORAGE_TOKEN:
+        logger.warning("STORAGE_TOKEN is not set, log_excerpts will not be uploaded")
+        return input_data
+
+    builds = input_data.get("builds", [])
+    tests = input_data.get("tests", [])
+    for build in builds:
+        if build.get("log_excerpt"):
+            id = build.get("id", "unknown")
+            log_excerpt = build["log_excerpt"]
+            if isinstance(log_excerpt, str) and len(log_excerpt) > LOGEXCERPT_THRESHOLD:
+                log_hash = hashlib.sha256(log_excerpt.encode('utf-8')).hexdigest()
+                if VERBOSE:
+                    logger.info(f"Uploading log_excerpt for build {id} hash {log_hash} with size {len(log_excerpt)} bytes")
+                # Upload to storage and replace with a reference
+                build["log_excerpt"] = upload_logexcerpt(log_excerpt, log_hash)
+
+    for test in tests:
+        if test.get("log_excerpt"):
+            id = test.get("id", "unknown")
+            log_excerpt = test["log_excerpt"]
+            if isinstance(log_excerpt, str) and len(log_excerpt) > LOGEXCERPT_THRESHOLD:
+                log_hash = hashlib.sha256(log_excerpt.encode('utf-8')).hexdigest()
+                if VERBOSE:
+                    logger.info(f"Uploading log_excerpt for test {id} hash {log_hash} with size {len(log_excerpt)} bytes")
+                # Upload to storage and replace with a reference
+                test["log_excerpt"] = upload_logexcerpt(log_excerpt, log_hash)
     return input_data
 
 def process_file(filename, trees_name, db_client, spool_dir):
@@ -115,7 +186,7 @@ def process_file(filename, trees_name, db_client, spool_dir):
             logger.info(f"File size: {fsize}")
         try:
             data = json.loads(f.read())
-            data = extract_logspec(data)
+            data = extract_log_excerpt(data)
             data = standardize_trees_name(data, trees_name)
             io_schema = db_client.get_schema()[1]
             data = io_schema.validate(data)
