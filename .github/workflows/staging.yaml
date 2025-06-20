@@ -44,6 +44,8 @@ jobs:
           set -e
           cd /srv/kcidb-ng
           git stash
+          git checkout main
+          git reset --hard
           git fetch --all --prune
           git checkout staging.kernelci.org
           git rebase origin/staging.kernelci.org
