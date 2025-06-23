@@ -23,11 +23,14 @@ import json
 import time
 import logging
 import yaml
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import functools
 import requests
 import hashlib
 import tempfile
+import threading
+from queue import Queue
+import traceback
 
 # default database
 DATABASE = "postgresql:dbname=kcidb user=kcidb password=kcidb host=localhost port=5432"
@@ -36,6 +39,10 @@ STORAGE_TOKEN = os.environ.get("STORAGE_TOKEN", None)
 LOGEXCERPT_THRESHOLD = 256  # 256 bytes threshold for logexcerpt
 
 logger = logging.getLogger('ingester')
+
+# Thread-safe queue for database operations
+db_queue = Queue()
+db_lock = threading.Lock()
 
 def get_db_credentials():
     global DATABASE
@@ -168,70 +175,172 @@ def extract_log_excerpt(input_data):
                 test["log_excerpt"] = upload_logexcerpt(log_excerpt, log_hash)
     return input_data
 
-def process_file(filename, trees_name, db_client, spool_dir):
-    """ Process a single file, standardizing tree names and loading into the database """
+
+def prepare_file_data(filename, trees_name, spool_dir, io_schema):
+    """
+    Prepare file data: read, extract log excerpts, standardize tree names, validate.
+    This function does everything except the actual database load.
+    """
+    full_filename = os.path.join(spool_dir, filename)
+    fsize = os.path.getsize(full_filename)
+    
+    if fsize == 0:
+        if VERBOSE:
+            logger.info(f"File {full_filename} is empty, skipping, deleting")
+        os.remove(full_filename)
+        return None, None
+    
+    start_time = time.time()
+    if VERBOSE:
+        logger.info(f"Processing file {filename}, size: {fsize}")
+    
+    try:
+        with open(full_filename, "r") as f:
+            data = json.loads(f.read())
+        
+        # These operations can be done in parallel (especially extract_log_excerpt)
+        data = extract_log_excerpt(data)
+        data = standardize_trees_name(data, trees_name)
+        data = io_schema.validate(data)
+        data = io_schema.upgrade(data, copy=False)
+        
+        processing_time = time.time() - start_time
+        return data, {
+            'filename': filename,
+            'full_filename': full_filename,
+            'fsize': fsize,
+            'processing_time': processing_time
+        }
+    except Exception as e:
+        logger.error(f"Error preparing data from {filename}: {e}")
+        logger.error(traceback.format_exc())
+        return None, {
+            'filename': filename,
+            'full_filename': full_filename,
+            'error': str(e)
+        }
+
+
+def db_worker(db_client, stop_event):
+    """
+    Worker thread that processes the database queue.
+    This is the only thread that interacts with the database.
+    """
+    while not stop_event.is_set() or not db_queue.empty():
+        try:
+            item = db_queue.get(timeout=0.1)
+            if item is None:  # Poison pill
+                break
+            
+            data, metadata = item
+            if data is not None:
+                with db_lock:
+                    db_client.load(data)
+                
+                if VERBOSE and 'processing_time' in metadata:
+                    ing_speed = metadata['fsize'] / metadata['processing_time'] / 1024
+                    logger.info(f"Ingested {metadata['filename']} in {ing_speed:.2f} KB/s")
+            
+            db_queue.task_done()
+        except:
+            # Queue.get timeout, continue
+            pass
+
+
+def process_file(filename, trees_name, spool_dir, io_schema):
+    """
+    Process a single file in a thread, then queue it for database insertion.
+    """
     failed_dir = os.path.join(spool_dir, "failed")
     archive_dir = os.path.join(spool_dir, "archive")
- 
-    full_filename = os.path.join(spool_dir, filename)
-    with open(full_filename, "r") as f:
-        fsize = os.path.getsize(full_filename)
-        if fsize == 0:
-            if VERBOSE:
-                logger.info(f"File {full_filename} is empty, skipping, deleting")
-            os.remove(full_filename)
-            return False
-        start_time = time.time()
-        if VERBOSE:
-            logger.info(f"File size: {fsize}")
+    
+    data, metadata = prepare_file_data(filename, trees_name, spool_dir, io_schema)
+    
+    if 'error' in metadata:
+        # Move to failed directory
         try:
-            data = json.loads(f.read())
-            data = extract_log_excerpt(data)
-            data = standardize_trees_name(data, trees_name)
-            io_schema = db_client.get_schema()[1]
-            data = io_schema.validate(data)
-            data = io_schema.upgrade(data, copy=False)
-            db_client.load(data)
-        except Exception as e:
-            logger.error(f"Error loading data: {e}")
-            logger.error(f"File: {full_filename}")
-            move_file_to_failed_dir(full_filename, failed_dir)
-            return False
-        ing_speed = fsize / (time.time() - start_time) / 1024
-        if VERBOSE:
-            logger.info(f"Ingested {filename} in {ing_speed} KB/s")
-        # Archive the file
-        try:
-            os.rename(full_filename, os.path.join(archive_dir, filename))
-        except Exception as e:
-            logger.error(f"Error archiving file {filename}: {e}")
-            return False
-
+            move_file_to_failed_dir(metadata['full_filename'], failed_dir)
+        except:
+            pass
+        return False
+    
+    if data is None:
+        # Empty file, already deleted
+        return True
+    
+    # Queue for database insertion
+    db_queue.put((data, metadata))
+    
+    # Archive the file after queuing (we can do this optimistically)
+    try:
+        os.rename(metadata['full_filename'], os.path.join(archive_dir, metadata['filename']))
+    except Exception as e:
+        logger.error(f"Error archiving file {metadata['filename']}: {e}")
+        return False
+    
     return True
 
 
-def ingest_submissions(spool_dir, trees_name, db_client=None):
+def ingest_submissions_parallel(spool_dir, trees_name, db_client=None, max_workers=5):
+    """
+    Ingest submissions in parallel using ThreadPoolExecutor for I/O operations
+    and a single database worker thread.
+    """
     if db_client is None:
         raise Exception("db_client is None")
+    
     io_schema = db_client.get_schema()[1]
-    # iterate over all files in the directory spool_dir
+    
+    # Get list of JSON files to process
+    json_files = [
+        f for f in os.listdir(spool_dir)
+        if os.path.isfile(os.path.join(spool_dir, f)) and f.endswith(".json")
+    ]
+    
+    if not json_files:
+        return
+    
+    logger.info(f"Found {len(json_files)} files to process")
+    
+    # Start database worker thread
+    stop_event = threading.Event()
+    db_thread = threading.Thread(target=db_worker, args=(db_client, stop_event))
+    db_thread.start()
+    
     stat_ok = 0
     stat_fail = 0
-    for filename in os.listdir(spool_dir):
-        # skip directories
-        if os.path.isdir(os.path.join(spool_dir, filename)):
-            continue
-        # skip if not json
-        if not filename.endswith(".json"):
-            continue
-        logger.info(f"Ingesting {filename}")
-        r = process_file(filename, trees_name, db_client, spool_dir)
-        if r:
-            stat_ok += 1
-        else:
-            stat_fail += 1
-    # iterate over res and print statistics
-    # this also will wait asynchronously for all files to be processed
+    
+    try:
+        # Process files in parallel
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all files for processing
+            future_to_file = {
+                executor.submit(process_file, filename, trees_name, spool_dir, io_schema): filename
+                for filename in json_files
+            }
+            
+            # Collect results
+            for future in as_completed(future_to_file):
+                filename = future_to_file[future]
+                try:
+                    result = future.result()
+                    if result:
+                        stat_ok += 1
+                    else:
+                        stat_fail += 1
+                except Exception as e:
+                    logger.error(f"Exception processing {filename}: {e}")
+                    stat_fail += 1
+        
+        # Wait for all database operations to complete
+        db_queue.join()
+        
+    finally:
+        # Signal database worker to stop
+        stop_event.set()
+        db_queue.put(None)  # Poison pill
+        db_thread.join()
+    
     if stat_ok + stat_fail > 0:
         logger.info(f"Processed {stat_ok + stat_fail} files: {stat_ok} succeeded, {stat_fail} failed")
 
@@ -252,6 +361,7 @@ def verify_dir(dir):
         raise Exception(f"Directory {dir} is not writable")
     logger.info(f"Directory {dir} is valid and writable")
 
+
 def verify_spool_dirs(spool_dir):
     failed_dir = os.path.join(spool_dir, "failed")
     archive_dir = os.path.join(spool_dir, "archive")
@@ -268,18 +378,26 @@ def main():
         logging.basicConfig(level=logging.INFO)
     else:
         logging.basicConfig(level=logging.WARNING)
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("--spool-dir", type=str, required=True)
     parser.add_argument("--verbose", type=int, default=VERBOSE)
+    parser.add_argument("--max-workers", type=int, default=5, 
+                        help="Maximum number of parallel workers for file processing")
     args = parser.parse_args()
+    
+    VERBOSE = args.verbose
+    
     logger.info("Starting ingestion process...")
     verify_spool_dirs(args.spool_dir)
     trees_name = load_trees_name()
     get_db_credentials()
     db_client = get_db_client(DATABASE)
+    
     while True:
-        ingest_submissions(args.spool_dir, trees_name, db_client)
+        ingest_submissions_parallel(args.spool_dir, trees_name, db_client, args.max_workers)
         time.sleep(1)
+
 
 if __name__ == "__main__":
     main()
