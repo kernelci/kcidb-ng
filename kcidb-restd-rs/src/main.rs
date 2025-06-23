@@ -41,7 +41,6 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::limit::RequestBodyLimitLayer;
-use std::os::unix::process::CommandExt;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -75,6 +74,7 @@ struct AppState {
     submission_counter: AtomicU64,
     submission_size_total: AtomicU64,
     error_counter: AtomicU64,
+    start_time: std::time::Instant,
 }
 
 fn verify_submission_path(path: &str) -> bool {
@@ -109,32 +109,37 @@ async fn submission_metrics(
     // Prometheus metrics format
     // String to hold the metrics
     let mut metrics = String::new();
-    metrics.push_str("# HELP kcdb_submissions_total Total number of submissions received\n");
-    metrics.push_str("# TYPE kcdb_submissions_total counter\n");
+    metrics.push_str("# HELP kcidb_submissions_total Total number of submissions received\n");
+    metrics.push_str("# TYPE kcidb_submissions_total counter\n");
     metrics.push_str(&format!(
-        "kcdb_submissions_total {}\n",
+        "kcidb_submissions_total {}\n",
         state.submission_counter.load(Ordering::Relaxed)
     ));
     metrics.push_str(
-        "# HELP kcdb_submission_size_total Total size of all submissions received in bytes\n",
+        "# HELP kcidb_submission_size_total Total size of all submissions received in bytes\n",
     );
-    metrics.push_str("# TYPE kcdb_submission_size_total counter\n");
+    metrics.push_str("# TYPE kcidb_submission_size_total counter\n");
     metrics.push_str(&format!(
-        "kcdb_submission_size_total {}\n",
+        "kcidb_submission_size_total {}\n",
         state.submission_size_total.load(Ordering::Relaxed)
     ));
-    metrics.push_str("# HELP kcdb_errors_total Total number of errors encountered\n");
-    metrics.push_str("# TYPE kcdb_errors_total counter\n");
+    metrics.push_str("# HELP kcidb_errors_total Total number of errors encountered\n");
+    metrics.push_str("# TYPE kcidb_errors_total counter\n");
     metrics.push_str(&format!(
-        "kcdb_errors_total {}\n",
+        "kcidb_errors_total {}\n",
         state.error_counter.load(Ordering::Relaxed)
     ));
     // number of json files in the spool directory
     metrics.push_str(
-        "# HELP kcdb_json_files_total Total number of JSON files in the spool directory\n",
+        "# HELP kcidb_json_files_total Total number of JSON files in the spool directory\n",
     );
-    metrics.push_str("# TYPE kcdb_json_files_total gauge\n");
-    metrics.push_str(&format!("kcdb_json_files_total {}\n", json_files_num));
+    metrics.push_str("# TYPE kcidb_json_files_total gauge\n");
+    metrics.push_str(&format!("kcidb_json_files_total {}\n", json_files_num));
+    // Uptime in seconds
+    let uptime = state.start_time.elapsed().as_secs();
+    metrics.push_str("# HELP kcidb_uptime_seconds Uptime of the server in seconds\n");
+    metrics.push_str("# TYPE kcidb_uptime_seconds gauge\n");
+    metrics.push_str(&format!("kcidb_uptime_seconds {}\n", uptime));
 
     (StatusCode::OK, metrics)
 }
@@ -170,7 +175,7 @@ async fn handle_root() -> impl IntoResponse {
 #[tokio::main]
 async fn main() {
     let limit_layer = RequestBodyLimitLayer::new(512 * 1024 * 1024);
-    let mut args = Args::parse();
+    let args = Args::parse();
     let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| args.jwt_secret.clone());
     let app_state = Arc::new(AppState {
         directory: args.directory,
@@ -178,6 +183,7 @@ async fn main() {
         submission_counter: AtomicU64::new(0),
         submission_size_total: AtomicU64::new(0),
         error_counter: AtomicU64::new(0),
+        start_time: std::time::Instant::now(),
     });
     let tls_key: String;
     let tls_chain: String;
