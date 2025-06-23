@@ -28,6 +28,7 @@ import json
 import requests
 import kcidb
 import logspec.main
+import logging
 
 
 # Configuration tables per object type
@@ -116,6 +117,7 @@ def get_logspec_errors(parsed_data, parser):
             k: v for k, v in vars(error).items() if v and not k.startswith("_")
         }
         logspec_dict["error"]["signature"] = error._signature
+        logspec_dict["error"]["signature_loc"] = error._signature_loc
         logspec_dict["error"]["log_excerpt"] = error._report
         logspec_dict["error"]["signature_fields"] = {
             field: getattr(error, field) for field in error._signature_fields
@@ -204,7 +206,28 @@ def process_log(log_file, parser, start_state):
     return get_logspec_errors(parsed_data, parser)
 
 
-def generate_issues_and_incidents(result_id, log_file, test_type, origin):
+def look_up_existing_issue(cursor, origin, signature_loc):
+    try:
+        query = (
+            "SELECT id, version FROM issues"
+            " WHERE misc->'logspec'->'error'->>'signature_loc' = %s"
+            " AND origin = %s"
+            " AND _timestamp >= NOW() - INTERVAL '2 days'"
+        )
+        cursor.execute(query, (signature_loc, origin))
+        issues = cursor.fetchall()
+        #logging.info(f"SQL {query} get_unprocessed_builds: {builds} origins: {origins}")
+        print(f"h {issues}")
+        if issues:
+            return issues[0]
+        else:
+            return None
+    except Exception as e:
+        logging.error(f"Error fetching unprocessed builds: {e}")
+        return None
+
+
+def generate_issues_and_incidents(cursor, result_id, log_file, test_type, origin):
     parsed_data = {
         "issue_node": [],
         "incident_node": [],
@@ -219,15 +242,27 @@ def generate_issues_and_incidents(result_id, log_file, test_type, origin):
     parser = test_types[test_type]["parser"]
     error_list, new_status = process_log(log_file, parser, start_state)
     for error in error_list:
+        issue_id = ""
+        issue_version = None
         if error and error["error"].get("signature"):
             # do not generate issues for error_return_code since they are not
             # fatal, avoid noise.
             if error["error"].get("error_type") == "linux.kernel.error_return_code":
                 continue
 
+            if test_type == 'build':
+                # Use logspec signature_loc to fold under the same issue
+                # build failures reported by different compilers
+                signature_loc = error["error"].get("signature_loc")
+                issue = look_up_existing_issue(cursor, origin, signature_loc)
+                if issue:
+                    issue_id = issue[0]
+                    issue_version = issue[1]
+
             issue = new_issue(error, test_type, origin)
             parsed_data["issue_node"].append(issue)
-            issue_id = issue["id"]
+            if not issue_id:
+                issue_id = issue["id"]
             issue_version = issue["version"]
             parsed_data["incident_node"].append(
                 new_incident(result_id, issue_id, test_type, issue_version, origin)
