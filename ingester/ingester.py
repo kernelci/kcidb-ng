@@ -37,6 +37,7 @@ DATABASE = "postgresql:dbname=kcidb user=kcidb password=kcidb host=localhost por
 VERBOSE = 0
 STORAGE_TOKEN = os.environ.get("STORAGE_TOKEN", None)
 LOGEXCERPT_THRESHOLD = 256  # 256 bytes threshold for logexcerpt
+CACHE_LOGS = {}
 
 logger = logging.getLogger('ingester')
 
@@ -146,6 +147,7 @@ def extract_log_excerpt(input_data):
     Extract log_excerpt from builds and tests, if it is large,
     upload to storage and replace with a reference
     """
+    global CACHE_LOGS
     if not STORAGE_TOKEN:
         logger.warning("STORAGE_TOKEN is not set, log_excerpts will not be uploaded")
         return input_data
@@ -171,8 +173,14 @@ def extract_log_excerpt(input_data):
                 log_hash = hashlib.sha256(log_excerpt.encode('utf-8')).hexdigest()
                 if VERBOSE:
                     logger.info(f"Uploading log_excerpt for test {id} hash {log_hash} with size {len(log_excerpt)} bytes")
-                # Upload to storage and replace with a reference
-                test["log_excerpt"] = upload_logexcerpt(log_excerpt, log_hash)
+                # check if log_excerpt already uploaded (by hash as key)
+                if log_hash in CACHE_LOGS:
+                    logger.info(f"Log excerpt for test {id} already uploaded, using cached URL")
+                    test["log_excerpt"] = CACHE_LOGS[log_hash]
+                else:
+                    # Upload to storage and replace with a reference
+                    test["log_excerpt"] = upload_logexcerpt(log_excerpt, log_hash)
+                    CACHE_LOGS[log_hash] = test["log_excerpt"]
     return input_data
 
 
@@ -370,6 +378,19 @@ def verify_spool_dirs(spool_dir):
     verify_dir(archive_dir)
 
 
+def cache_logs_maintenance():
+    """
+    Periodically clean up the cache logs to prevent memory leak and slow down.
+    If CACHE_LOGS grow over 100k entries, truncate it to 0.
+    """
+    global CACHE_LOGS
+
+    # Limit the size of the cache to prevent memory leaks
+    if len(CACHE_LOGS) > 100000:  # Arbitrary limit, adjust as needed
+        CACHE_LOGS.clear()
+        if VERBOSE:
+            logger.info("Cache logs cleared")
+
 def main():
     global VERBOSE
     # read from environment variable KCIDB_VERBOSE
@@ -396,6 +417,7 @@ def main():
     
     while True:
         ingest_submissions_parallel(args.spool_dir, trees_name, db_client, args.max_workers)
+        cache_logs_maintenance()
         time.sleep(1)
 
 
