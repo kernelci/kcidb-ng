@@ -39,6 +39,7 @@ VERBOSE = 0
 STORAGE_TOKEN = os.environ.get("STORAGE_TOKEN", None)
 LOGEXCERPT_THRESHOLD = 256  # 256 bytes threshold for logexcerpt
 CACHE_LOGS = {}
+cache_logs_lock = threading.Lock()
 
 logger = logging.getLogger('ingester')
 
@@ -146,12 +147,30 @@ def upload_logexcerpt(logexcerpt, id):
     return f"{STORAGE_BASE_URL}/logexcerpt/{id}/logexcerpt.txt.gz"
 
 
+def get_from_cache(log_hash):
+    """
+    Check if log_hash is in the cache
+    """
+    with cache_logs_lock:
+        return CACHE_LOGS.get(log_hash)
+
+
+def set_in_cache(log_hash, url):
+    """
+    Set log_hash in the cache with the given URL
+    """
+    global CACHE_LOGS
+    with cache_logs_lock:
+        CACHE_LOGS[log_hash] = url
+        if VERBOSE:
+            logger.info(f"Cached log excerpt with hash {log_hash} at {url}")
+
+
 def extract_log_excerpt(input_data):
     """
     Extract log_excerpt from builds and tests, if it is large,
     upload to storage and replace with a reference
     """
-    global CACHE_LOGS
     if not STORAGE_TOKEN:
         logger.warning("STORAGE_TOKEN is not set, log_excerpts will not be uploaded")
         return input_data
@@ -166,8 +185,15 @@ def extract_log_excerpt(input_data):
                 log_hash = hashlib.sha256(log_excerpt.encode('utf-8')).hexdigest()
                 if VERBOSE:
                     logger.info(f"Uploading log_excerpt for build {id} hash {log_hash} with size {len(log_excerpt)} bytes")
-                # Upload to storage and replace with a reference
-                build["log_excerpt"] = upload_logexcerpt(log_excerpt, log_hash)
+                cached_url = get_from_cache(log_hash)
+                if cached_url:
+                    if VERBOSE:
+                        logger.info(f"Log excerpt for build {id} already uploaded, using cached URL")
+                    build["log_excerpt"] = cached_url
+                else:
+                    cached_url = upload_logexcerpt(log_excerpt, log_hash)
+                    set_in_cache(log_hash, cached_url)
+                    build["log_excerpt"] = cached_url
 
     for test in tests:
         if test.get("log_excerpt"):
@@ -178,13 +204,16 @@ def extract_log_excerpt(input_data):
                 if VERBOSE:
                     logger.info(f"Uploading log_excerpt for test {id} hash {log_hash} with size {len(log_excerpt)} bytes")
                 # check if log_excerpt already uploaded (by hash as key)
-                if log_hash in CACHE_LOGS:
-                    logger.info(f"Log excerpt for test {id} already uploaded, using cached URL")
-                    test["log_excerpt"] = CACHE_LOGS[log_hash]
+                cached_url = get_from_cache(log_hash)
+                if cached_url:
+                    if VERBOSE:
+                        logger.info(f"Log excerpt for test {id} already uploaded, using cached URL")
+                    test["log_excerpt"] = cached_url
                 else:
-                    # Upload to storage and replace with a reference
-                    test["log_excerpt"] = upload_logexcerpt(log_excerpt, log_hash)
-                    CACHE_LOGS[log_hash] = test["log_excerpt"]
+                    cached_url = upload_logexcerpt(log_excerpt, log_hash)
+                    set_in_cache(log_hash, cached_url)
+                    test["log_excerpt"] = cached_url
+
     return input_data
 
 
@@ -390,10 +419,13 @@ def cache_logs_maintenance():
     global CACHE_LOGS
 
     # Limit the size of the cache to prevent memory leaks
-    if len(CACHE_LOGS) > 100000:  # Arbitrary limit, adjust as needed
-        CACHE_LOGS.clear()
-        if VERBOSE:
-            logger.info("Cache logs cleared")
+    # (we don't really need lock, as workers idle, but just in case)
+    with cache_logs_lock:
+        if len(CACHE_LOGS) > 100000:  # Arbitrary limit, adjust as needed
+            CACHE_LOGS.clear()
+            if VERBOSE:
+                logger.info("Cache logs cleared")
+
 
 def main():
     global VERBOSE
