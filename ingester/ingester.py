@@ -30,6 +30,7 @@ import hashlib
 import tempfile
 import threading
 from queue import Queue
+import queue
 import traceback
 import gzip
 
@@ -39,6 +40,7 @@ VERBOSE = 0
 STORAGE_TOKEN = os.environ.get("STORAGE_TOKEN", None)
 LOGEXCERPT_THRESHOLD = 256  # 256 bytes threshold for logexcerpt
 CACHE_LOGS = {}
+cache_logs_lock = threading.Lock()
 
 logger = logging.getLogger('ingester')
 
@@ -146,12 +148,30 @@ def upload_logexcerpt(logexcerpt, id):
     return f"{STORAGE_BASE_URL}/logexcerpt/{id}/logexcerpt.txt.gz"
 
 
+def get_from_cache(log_hash):
+    """
+    Check if log_hash is in the cache
+    """
+    with cache_logs_lock:
+        return CACHE_LOGS.get(log_hash)
+
+
+def set_in_cache(log_hash, url):
+    """
+    Set log_hash in the cache with the given URL
+    """
+    global CACHE_LOGS
+    with cache_logs_lock:
+        CACHE_LOGS[log_hash] = url
+        if VERBOSE:
+            logger.info(f"Cached log excerpt with hash {log_hash} at {url}")
+
+
 def extract_log_excerpt(input_data):
     """
     Extract log_excerpt from builds and tests, if it is large,
     upload to storage and replace with a reference
     """
-    global CACHE_LOGS
     if not STORAGE_TOKEN:
         logger.warning("STORAGE_TOKEN is not set, log_excerpts will not be uploaded")
         return input_data
@@ -166,8 +186,15 @@ def extract_log_excerpt(input_data):
                 log_hash = hashlib.sha256(log_excerpt.encode('utf-8')).hexdigest()
                 if VERBOSE:
                     logger.info(f"Uploading log_excerpt for build {id} hash {log_hash} with size {len(log_excerpt)} bytes")
-                # Upload to storage and replace with a reference
-                build["log_excerpt"] = upload_logexcerpt(log_excerpt, log_hash)
+                cached_url = get_from_cache(log_hash)
+                if cached_url:
+                    if VERBOSE:
+                        logger.info(f"Log excerpt for build {id} already uploaded, using cached URL")
+                    build["log_excerpt"] = cached_url
+                else:
+                    cached_url = upload_logexcerpt(log_excerpt, log_hash)
+                    set_in_cache(log_hash, cached_url)
+                    build["log_excerpt"] = cached_url
 
     for test in tests:
         if test.get("log_excerpt"):
@@ -178,13 +205,16 @@ def extract_log_excerpt(input_data):
                 if VERBOSE:
                     logger.info(f"Uploading log_excerpt for test {id} hash {log_hash} with size {len(log_excerpt)} bytes")
                 # check if log_excerpt already uploaded (by hash as key)
-                if log_hash in CACHE_LOGS:
-                    logger.info(f"Log excerpt for test {id} already uploaded, using cached URL")
-                    test["log_excerpt"] = CACHE_LOGS[log_hash]
+                cached_url = get_from_cache(log_hash)
+                if cached_url:
+                    if VERBOSE:
+                        logger.info(f"Log excerpt for test {id} already uploaded, using cached URL")
+                    test["log_excerpt"] = cached_url
                 else:
-                    # Upload to storage and replace with a reference
-                    test["log_excerpt"] = upload_logexcerpt(log_excerpt, log_hash)
-                    CACHE_LOGS[log_hash] = test["log_excerpt"]
+                    cached_url = upload_logexcerpt(log_excerpt, log_hash)
+                    set_in_cache(log_hash, cached_url)
+                    test["log_excerpt"] = cached_url
+
     return input_data
 
 
@@ -241,22 +271,29 @@ def db_worker(db_client, stop_event):
     while not stop_event.is_set() or not db_queue.empty():
         try:
             item = db_queue.get(timeout=0.1)
-            if item is None:  # Poison pill
+            if item is None:
+                db_queue.task_done()  # Important: mark the poison pill as done
                 break
-            
-            data, metadata = item
-            if data is not None:
-                with db_lock:
-                    db_client.load(data)
+            try:
+                data, metadata = item
+                if data is not None:
+                    with db_lock:
+                        db_client.load(data)
+                    
+                    if VERBOSE and 'processing_time' in metadata:
+                        ing_speed = metadata['fsize'] / metadata['processing_time'] / 1024
+                        logger.info(f"Ingested {metadata['filename']} in {ing_speed:.2f} KB/s")
+                if VERBOSE:
+                    logger.info(f"Processed file {metadata['filename']} with size {metadata['fsize']} bytes")
+            except Exception as e:
+                logger.error(f"Error processing item in db_worker: {e}")
+            finally:
+                db_queue.task_done()  # Always mark task as done, even if processing failed
                 
-                if VERBOSE and 'processing_time' in metadata:
-                    ing_speed = metadata['fsize'] / metadata['processing_time'] / 1024
-                    logger.info(f"Ingested {metadata['filename']} in {ing_speed:.2f} KB/s")
-            
-            db_queue.task_done()
-        except:
-            # Queue.get timeout, continue
-            pass
+        except queue.Empty:
+            continue  # Timeout occurred, continue to check stop_event
+        except Exception as e:
+            logger.error(f"Unexpected error in db_worker: {e}")
 
 
 def process_file(filename, trees_name, spool_dir, io_schema):
@@ -355,6 +392,8 @@ def ingest_submissions_parallel(spool_dir, trees_name, db_client=None, max_worke
     
     if stat_ok + stat_fail > 0:
         logger.info(f"Processed {stat_ok + stat_fail} files: {stat_ok} succeeded, {stat_fail} failed")
+    else:
+        logger.info("No files processed, nothing to do")
 
 
 def verify_dir(dir):
@@ -390,10 +429,13 @@ def cache_logs_maintenance():
     global CACHE_LOGS
 
     # Limit the size of the cache to prevent memory leaks
-    if len(CACHE_LOGS) > 100000:  # Arbitrary limit, adjust as needed
-        CACHE_LOGS.clear()
-        if VERBOSE:
-            logger.info("Cache logs cleared")
+    # (we don't really need lock, as workers idle, but just in case)
+    with cache_logs_lock:
+        if len(CACHE_LOGS) > 100000:  # Arbitrary limit, adjust as needed
+            CACHE_LOGS.clear()
+            if VERBOSE:
+                logger.info("Cache logs cleared")
+
 
 def main():
     global VERBOSE
