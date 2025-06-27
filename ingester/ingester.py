@@ -31,6 +31,7 @@ import tempfile
 import threading
 from queue import Queue
 import traceback
+import gzip
 
 # default database
 DATABASE = "postgresql:dbname=kcidb user=kcidb password=kcidb host=localhost port=5432"
@@ -114,14 +115,17 @@ def upload_logexcerpt(logexcerpt, id):
     # make temporary file with logexcerpt data
     with tempfile.NamedTemporaryFile(delete=False, suffix=".logexcerpt") as temp_file:
         logexcerpt_filename = temp_file.name
-        temp_file.write(logexcerpt.encode('utf-8'))
+        # gzip the logexcerpt
+        logexcerpt_compressed = gzip.compress(logexcerpt.encode('utf-8'))
+        # write to the temporary file
+        temp_file.write(logexcerpt_compressed)
         temp_file.flush()
     with open(logexcerpt_filename, "rb") as f:
         hdr = {
             "Authorization": f"Bearer {STORAGE_TOKEN}",
         }
         files={
-            "file0": ("logexcerpt.txt", f),
+            "file0": ("logexcerpt.txt.gz", f),
             "path": f"logexcerpt/{id}"
         }
         try:
@@ -139,7 +143,7 @@ def upload_logexcerpt(logexcerpt, id):
         logger.error(f"Failed to upload logexcerpt for {id}: {r.status_code} : {r.text}")
         return logexcerpt  # Return original logexcerpt if upload fails
 
-    return f"{STORAGE_BASE_URL}/logexcerpt/{id}/logexcerpt.txt"
+    return f"{STORAGE_BASE_URL}/logexcerpt/{id}/logexcerpt.txt.gz"
 
 
 def extract_log_excerpt(input_data):
