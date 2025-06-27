@@ -14,8 +14,9 @@ RUN git clone https://github.com/kernelci/logspec.git && \
 
 COPY logspec-worker/logspec_api.py /app/logspec_api.py
 COPY logspec-worker/logspec_worker.py /app/logspec_worker.py
+COPY logspec-worker/logspec_worker.yaml.example /app/logspec_worker.yaml
 
 WORKDIR /app
 
-CMD ["python", "/app/logspec_worker.py", "--spool-dir", "/app/spool"]
+CMD ["python", "/app/logspec_worker.py",  "--config-file", "/app/logspec_worker.yaml", "--spool-dir", "/app/spool"]
 
