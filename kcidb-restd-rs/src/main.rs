@@ -254,6 +254,7 @@ async fn main() {
             .route("/", get(handle_root))
             .route("/submit", post(receive_submission))
             .route("/status", get(submission_status))
+            .route("/metrics", get(submission_metrics))
             .with_state(app_state)
             .layer(limit_layer)
             .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));
