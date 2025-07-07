@@ -172,6 +172,23 @@ async fn handle_root() -> impl IntoResponse {
     )
 }
 
+async fn auth_test(
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let auth_result = verify_auth(headers, state.clone());
+    match auth_result {
+        Ok(()) => (),
+        Err(e) => {
+            println!("Error: {}", e);
+            let jsanswer = generate_answer("error", "0", Some(e));
+            return (StatusCode::UNAUTHORIZED, jsanswer);
+        }
+    }
+    let jsanswer = generate_answer("ok", "0", Some("Authentication successful".to_string()));
+    (StatusCode::OK, jsanswer) 
+}
+
 #[tokio::main]
 async fn main() {
     let limit_layer = RequestBodyLimitLayer::new(512 * 1024 * 1024);
@@ -256,6 +273,7 @@ async fn main() {
             .route("/status", get(submission_status))
             .route("/metrics", get(submission_metrics))
             .route("/health", get(|| async { "OK" }))
+            .route("/authtest", get(auth_test))
             .with_state(app_state)
             .layer(limit_layer)
             .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));
@@ -272,6 +290,7 @@ async fn main() {
             .route("/status", get(submission_status))
             .route("/metrics", get(submission_metrics))
             .route("/health", get(|| async { "OK" }))
+            .route("/authtest", get(auth_test))
             .with_state(app_state)
             .layer(limit_layer)
             .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));
