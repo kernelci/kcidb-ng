@@ -255,6 +255,7 @@ async fn main() {
             .route("/submit", post(receive_submission))
             .route("/status", get(submission_status))
             .route("/metrics", get(submission_metrics))
+            .route("/health", get(|| async { "OK" }))
             .with_state(app_state)
             .layer(limit_layer)
             .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));
@@ -270,6 +271,7 @@ async fn main() {
             .route("/submit", post(receive_submission))
             .route("/status", get(submission_status))
             .route("/metrics", get(submission_metrics))
+            .route("/health", get(|| async { "OK" }))
             .with_state(app_state)
             .layer(limit_layer)
             .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));
