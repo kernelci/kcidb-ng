@@ -379,16 +379,38 @@ async fn submission_status(
         return (StatusCode::BAD_REQUEST, jsanswer);
     }
 
-    let submission_file = format!("{}/submission-{}.json.temp", state.directory, id);
+    let mut submission_file = format!("{}/submission-{}.json.temp", state.directory, id);
     // check if the file exists
-    if !Path::new(&submission_file).exists() {
-        let jsanswer = generate_answer("notfound", id.as_str(), Some("File not found".to_string()));
-        return (StatusCode::NOT_FOUND, jsanswer);
+    if Path::new(&submission_file).exists() {
+        // check if the file is empty
+        let jsanswer = generate_answer("inprogress", id.as_str(), Some("File still in progress".to_string()));
+        return (StatusCode::OK, jsanswer)
     }
 
-    // check if the file is empty
-    let jsanswer = generate_answer("ok", id.as_str(), Some("File found".to_string()));
-    (StatusCode::OK, jsanswer)
+    submission_file = format!("{}/submission-{}.json", state.directory, id);
+    // check if the submission file exists
+    if Path::new(&submission_file).exists() {
+        let jsanswer = generate_answer("ready", id.as_str(), Some("File waiting for processing".to_string()));
+        return (StatusCode::OK, jsanswer);
+    }
+
+    submission_file = format!("{}/archive/submission-{}.json", state.directory, id);
+    // check if the archived file exists
+    if Path::new(&submission_file).exists() {
+        let jsanswer = generate_answer("processed", id.as_str(), Some("File archived".to_string()));
+        return (StatusCode::OK, jsanswer);
+    }
+
+    submission_file = format!("{}/failed/submission-{}.json", state.directory, id);
+    // check if the failed file exists
+    if Path::new(&submission_file).exists() {
+        let jsanswer = generate_answer("failed", id.as_str(), Some("File failed to pass validation".to_string()));
+        return (StatusCode::OK, jsanswer);
+    }
+
+    let jsanswer = generate_answer("notfound", id.as_str(), Some("File not found".to_string()));
+    
+    return (StatusCode::NOT_FOUND, jsanswer);
 }
 
 // Answer STATUS 200 if the submission is valid
