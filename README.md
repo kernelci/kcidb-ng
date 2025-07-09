@@ -115,6 +115,17 @@ If you want to use JWT authentication, you can generate a token using the follow
 kcidb-restd-rs/tools/jwt_rest.py --secret YOUR_SECRET --origin YOUR_ORIGIN
 ```
 
+### Validating tokens
+
+To validate a JWT token, you can use the following command:
+
+```bash
+curl -X GET \
+  -H "Authorization: Bearer <jwt_token>" \
+  https://localhost:443/authtest
+```
+This will return a JSON response with the token's validity.
+
 ### Sending Data to the API
 
 To submit data to the REST API:
