@@ -143,10 +143,19 @@ curl -X POST \
 You can check the status of your submission using:
 
 ```bash
-curl -X GET \
-  -H "Authorization: Bearer <jwt_token>" \
-  https://localhost:443/status/<submission_id>
+curl -X GET   -H "Authorization: Bearer <yourtoken>" https://staging.db.kernelci.org/status?id=wvTu6myNQOlM7IEWhHJz8WnnE0GTG1yz
+{"id":"wvTu6myNQOlM7IEWhHJz8WnnE0GTG1yz","status":"failed","message":"File found"}
 ```
+
+Possible status values:
+
+-	{"id":"0","status":"error","message":"Empty id"}	The request was invalid (e.g., missing or invalid ID, authentication error, etc.).
+-	{"id":"wvTu6myNQOlM7IEWhHJz8WnnE0GTG1yz","status":"inprogress","message":"File still in progress"}	A submission file with .json.temp exists, indicating the upload is not yet complete.
+-	{"id":"wvTu6myNQOlM7IEWhHJz8WnnE0GTG1yz","status":"ready","message":"File waiting for processing"}	The submission file exists and is ready for processing, but not yet archived or failed.
+-	{"id":"wvTu6myNQOlM7IEWhHJz8WnnE0GTG1yz","status":"processed","message":"File archived"}	The submission has been processed and archived.
+-	{"id":"wvTu6myNQOlM7IEWhHJz8WnnE0GTG1yz","status":"failed","message":"File failed to pass validation"}	The submission failed validation and is in the failed directory.
+-	{"id":"wvTu6myNQOlM7IEWhHJz8WnnE0GTG1yz","status":"notfound","message":"File not found"}	No submission file with the given ID was found in any expected location.
+
 
 ## Directory Structure
 
