@@ -344,13 +344,18 @@ fn generate_answer(status: &str, id: &str, message: Option<String>) -> String {
     serde_json::to_string(&status).unwrap().to_string()
 }
 
+
+#[derive(serde::Deserialize)]
+struct StatusQuery {
+    id: String,
+}
 /*
 /status?id=1234
 */
 async fn submission_status(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
-    id: String,
+    axum::extract::Query(query): axum::extract::Query<StatusQuery>,
 ) -> impl IntoResponse {
     let auth_result = verify_auth(headers, state.clone());
     match auth_result {
@@ -361,6 +366,7 @@ async fn submission_status(
             return (StatusCode::UNAUTHORIZED, jsanswer);
         }
     }
+    let id = query.id;
     // validate id for safe characters
     if id.is_empty() {
         let jsanswer = generate_answer("error", "0", Some("Empty id".to_string()));
