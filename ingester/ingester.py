@@ -167,6 +167,23 @@ def set_in_cache(log_hash, url):
             logger.info(f"Cached log excerpt with hash {log_hash} at {url}")
 
 
+def set_log_excerpt_ofile(build, url):
+    """
+    Clean log_excerpt field
+    Create name/url dict and append to output_files of job
+    """
+    build["log_excerpt"] = None
+    data = {
+        "name": "log_excerpt",
+        "url": url,
+    }
+    if "output_files" not in build:
+        build["output_files"] = []
+    
+    build["output_files"].append(data)
+    return build
+
+
 def extract_log_excerpt(input_data):
     """
     Extract log_excerpt from builds and tests, if it is large,
@@ -190,11 +207,11 @@ def extract_log_excerpt(input_data):
                 if cached_url:
                     if VERBOSE:
                         logger.info(f"Log excerpt for build {id} already uploaded, using cached URL")
-                    build["log_excerpt"] = cached_url
+                    set_log_excerpt_ofile(build, cached_url)
                 else:
                     cached_url = upload_logexcerpt(log_excerpt, log_hash)
                     set_in_cache(log_hash, cached_url)
-                    build["log_excerpt"] = cached_url
+                    set_log_excerpt_ofile(build, cached_url)
 
     for test in tests:
         if test.get("log_excerpt"):
@@ -209,11 +226,11 @@ def extract_log_excerpt(input_data):
                 if cached_url:
                     if VERBOSE:
                         logger.info(f"Log excerpt for test {id} already uploaded, using cached URL")
-                    test["log_excerpt"] = cached_url
+                    set_log_excerpt_ofile(test, cached_url)
                 else:
                     cached_url = upload_logexcerpt(log_excerpt, log_hash)
                     set_in_cache(log_hash, cached_url)
-                    test["log_excerpt"] = cached_url
+                    set_log_excerpt_ofile(test, cached_url)
 
     return input_data
 
