@@ -39,6 +39,7 @@ DATABASE = "postgresql:dbname=kcidb user=kcidb password=kcidb host=localhost por
 VERBOSE = 0
 STORAGE_TOKEN = os.environ.get("STORAGE_TOKEN", None)
 LOGEXCERPT_THRESHOLD = 256  # 256 bytes threshold for logexcerpt
+CONVERT_LOG_EXCERPT = False  # If True, convert log_excerpt to output_files url
 CACHE_LOGS = {}
 cache_logs_lock = threading.Lock()
 
@@ -258,7 +259,8 @@ def prepare_file_data(filename, trees_name, spool_dir, io_schema):
             data = json.loads(f.read())
         
         # These operations can be done in parallel (especially extract_log_excerpt)
-        data = extract_log_excerpt(data)
+        if CONVERT_LOG_EXCERPT:
+            data = extract_log_excerpt(data)
         data = standardize_trees_name(data, trees_name)
         data = io_schema.validate(data)
         data = io_schema.upgrade(data, copy=False)
@@ -455,14 +457,15 @@ def cache_logs_maintenance():
 
 
 def main():
-    global VERBOSE
+    global VERBOSE, CONVERT_LOG_EXCERPT
     # read from environment variable KCIDB_VERBOSE
     VERBOSE = int(os.environ.get("KCIDB_VERBOSE", 0))
     if VERBOSE:
         logging.basicConfig(level=logging.INFO)
     else:
         logging.basicConfig(level=logging.WARNING)
-    
+    CONVERT_LOG_EXCERPT = os.environ.get("CONVERT_LOG_EXCERPT", "False").lower() in ("true", "1", "yes")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--spool-dir", type=str, required=True)
     parser.add_argument("--verbose", type=int, default=VERBOSE)
