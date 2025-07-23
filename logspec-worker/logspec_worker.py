@@ -308,7 +308,7 @@ def fetch_log_id(log_url):
         return None
 
 
-def logspec_process_node(node, kind):
+def logspec_process_node(cursor, node, kind):
     """
     Process the test over logspec
     Allowed values for kind are: build, boot, test
@@ -321,7 +321,7 @@ def logspec_process_node(node, kind):
         logging.error(f"Error fetching log {log_url}")
         return
     log_file = os.path.join("/cache", log_id)
-    return generate_issues_and_incidents(node["id"], log_file, kind, node["origin"])
+    return generate_issues_and_incidents(cursor, node["id"], log_file, kind, node["origin"])
 
 
 def remove_none_fields(data):
@@ -395,7 +395,7 @@ def process_tests(cursor, state):
         logging.info(f"Processing test {test['id']}")
         # Call logspec, we assume all tests are of type "boot"
         # TODO: We need different types of parsers for different tests
-        res_nodes, new_status = logspec_process_node(test, "boot")
+        res_nodes, new_status = logspec_process_node(cursor, test, "boot")
         if res_nodes["issue_node"] or res_nodes["incident_node"]:
             if not state.dry_run:
                 # submit to kcidb incident and issue
@@ -439,7 +439,7 @@ def process_builds(cursor, state):
         # Process the build
         logging.info(f"Processing build {build['id']}")
         # Call logspec
-        res_nodes, new_status = logspec_process_node(build, "build")
+        res_nodes, new_status = logspec_process_node(cursor, build, "build")
         if res_nodes["issue_node"] or res_nodes["incident_node"]:
             # submit to kcidb incident and issue
             if not state.dry_run:
@@ -518,7 +518,4 @@ def main():
 
 
 if __name__ == "__main__":
-    while True:
-        main()
-        # sleep for 10 seconds
-        time.sleep(10)
+    main()
