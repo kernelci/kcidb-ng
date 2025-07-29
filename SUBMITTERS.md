@@ -7,7 +7,7 @@ KCIDB-NG is a database designed to collect and manage data from Linux kernel tes
 ## Prerequisites
 Before you start submitting data to KCIDB-NG, ensure that you have the following:
 1. **KCIDB-ng tokens**: You will need authentication tokens to submit data to KCIDB-NG. These tokens can be obtained from the KernelCI team. Please refer to the [KernelCI contacts](https://docs.kernelci.org/contacts/) for more information on how to obtain these tokens.
-2. **Build and test infrastructure**: You should have a build infrastructure for Linux kernel testing that can provide results in a format compatible with KCIDB-NG. This includes the ability to build kernels, run tests, and collect results.
+2. **Build and test infrastructure**: You should have an infrastructure for Linux kernel testing that can provide results (builds and/or tests) in a format compatible with KCIDB-NG. This includes the ability to build kernels, run tests, and collect results.
 3. **Knowledge of JSON**: KCIDB-NG uses JSON as the data format for submissions. You should be familiar with JSON and how to format your data accordingly.
 
 
