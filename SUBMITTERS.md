@@ -45,66 +45,6 @@ The KCIDB-NG submission process is based on HTTP REST API. You will need to send
 Example of submission request using curl available in the [README](https://github.com/kernelci/kcidb-ng/README.md) , section `Sending Data to the API`. Note, submission endpoint is always `/submit` and the request body must be a valid JSON object.
 
 
-### What does a typical submission file look like?
-
-```
-{
-  "version": {
-    "major": 5,
-    "minor": 1
-  },
-  "tests": [
-    {
-      "build_id": "maestro:687d72f82ce2c1874edf57a4",
-      "id": "ti:783b28417d524d40ab3e43bd",
-      "origin": "ti",
-      "environment": {
-        "compatible": [
-          "ti,dra718-evm",
-          "ti,dra718",
-          "ti,dra722",
-          "ti,dra72",
-          "ti,dra7"
-        ],
-        "comment": "Runtime: opentest-ti",
-        "misc": {
-          "platform": "ti,dra718-evm",
-          "measurement": null,
-          "job_id": "8_533930518",
-          "job_context": null
-        }
-      },
-      "path": "boot",
-      "log_url": "http://files.kernelci.org//ti/mainline/master/v6.16-rc7/arm/multi_v7_defconfig+kselftest/gcc-12/baseline-boot-dra71x-evm.txt.gz",
-      "status": "PASS",
-      "start_time": "2025-07-20T23:59:13.000000Z",
-      "misc": {
-        "runtime": "opentest-ti",
-        "maestro_viewer": null,
-        "job_url": null,
-        "error_code": null,
-        "error_msg": null
-      }
-    }
-  ]
-}
-```
-
-Where you can see the following fields:
-- `version`: The version of the KCIDB-NG schema being used.
-- `tests`: An array of test results, where each test result contains:
-  - `build_id`: The ID of the build associated with the test. **It must match the build ID in the KCIDB-NG database in the builds collection.**
-  - `id`: The unique identifier for the test.
-  - `origin`: The origin of the test (e.g., "ti" for Texas Instruments, "maestro" for KernelCI Maestro, and so on).
-  - `environment`: Details about the test environment, including compatible devices and additional metadata.
-  - `path`: The path or type of test being performed (e.g., "boot").
-  - `log_url`: A URL to the log file for the test.
-  - `status`: The status of the test (e.g., "PASS", "FAIL").
-  - `start_time`: The time when the test started.
-  - `misc`: Additional miscellaneous information related to the test.
-
-This is a minimal example of a test submission. A submission can contain multiple tests, or builds and tests together, and might even include incidents and issues. 
-
 ### I've submitted the data, what happens next?
 After you submit your data, it will be processed by the KCIDB-NG system.
 Here is how the current system architecture works:
