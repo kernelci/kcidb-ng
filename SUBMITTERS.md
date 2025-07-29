@@ -12,7 +12,7 @@ Before you start submitting data to KCIDB-NG, ensure that you have the following
 
 
 ## Who can submit?
-1) Anyone who has a build infrastructure for Linux kernel testing and can provide results in a format that is compatible with KCIDB-NG. We require kernel configuration, information about the build environment, build results, build logs, and a few other details.
+1) Anyone who has a CI/test infrastructure for Linux kernel testing and can provide results in a format that is compatible with KCIDB-NG. We require kernel configuration, information about the build environment, build results, build logs, and a few other details.
 2) The same applies to testing built kernels. We require test results, test logs, and information about the test environment (device type, configuration, etc). You can use kernel builds from KCIDB to test your own hardware, or you can use your own kernel builds to test hardware from KCIDB.
 3) Both build and test results can be submitted by the same submitter or by different submitters.
 
