@@ -142,3 +142,12 @@ When submitting data to KCIDB-NG, please ensure that you do not include any sens
 ## Staging and Production guidelines
 
 When submitting data to KCIDB-NG, you can use either the staging or production endpoints. The staging environment is used for testing and development purposes, while the production environment is used for live submissions, where kernel developers and maintainers can access the data and rely on it for their work. It is important to ensure that any data submitted to the production environment is thoroughly tested and validated to avoid any disruptions to the live system and to not affect the work of kernel developers and maintainers.
+
+Current staging and production submission endpoints are:
+- **Staging**: `https://staging.db.kernelci.org/`
+- **Production**: `https://db.kernelci.org/`
+Dashboard URL:
+- **Staging Dashboard**: `https://staging-dashboard.kernelci.org/`
+- **Production Dashboard**: `https://dashboard.kernelci.org/`
+
+Please note that playground database and grafana is not relevant to new setup, so do not use it for troubleshooting or testing.
