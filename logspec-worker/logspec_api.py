@@ -28,6 +28,7 @@ import json
 import requests
 import kcidb
 import logspec.main
+import logging
 
 
 # Configuration tables per object type
@@ -116,6 +117,7 @@ def get_logspec_errors(parsed_data, parser):
             k: v for k, v in vars(error).items() if v and not k.startswith("_")
         }
         logspec_dict["error"]["signature"] = error._signature
+        logspec_dict["error"]["signature_loc"] = error._signature_loc
         logspec_dict["error"]["log_excerpt"] = error._report
         logspec_dict["error"]["signature_fields"] = {
             field: getattr(error, field) for field in error._signature_fields
@@ -125,13 +127,25 @@ def get_logspec_errors(parsed_data, parser):
     return errors_list, new_status
 
 
-def new_issue(logspec_error, test_type, origin):
+def get_or_create_issue(cursor, logspec_error, test_type, origin):
     """Generates a new KCIDB issue object from a logspec error for a
     specific object type.
     Returns the issue as a dict.
     """
     error_copy = deepcopy(logspec_error)
     signature = error_copy["error"].pop("signature")
+
+    issue_id = f"{origin}:{signature}"
+    issue_version = 1
+    if test_type == 'build':
+        # Use logspec signature_loc to fold under the same issue
+        # build failures reported by different compilers
+        signature_loc = logspec_error["error"].get("signature_loc")
+        existing_issue = look_up_existing_issue(cursor, origin, signature_loc)
+        if existing_issue:
+            issue_id = existing_issue[0]
+            issue_version = existing_issue[1]
+
     comment = ""
     if "error_summary" in error_copy["error"]:
         comment += f" {error_copy['error']['error_summary']}"
@@ -144,8 +158,8 @@ def new_issue(logspec_error, test_type, origin):
     comment += f" [logspec:{test_types[test_type]['parser']},{error_copy['error']['error_type']}]"
     issue = {
         "origin": origin,
-        "id": f"{origin}:{signature}",
-        "version": 1,
+        "id": issue_id,
+        "version": issue_version,
         "comment": comment,
         "misc": {"logspec": error_copy},
         # Set culprit_code to True by default
@@ -204,7 +218,26 @@ def process_log(log_file, parser, start_state):
     return get_logspec_errors(parsed_data, parser)
 
 
-def generate_issues_and_incidents(result_id, log_file, test_type, origin):
+def look_up_existing_issue(cursor, origin, signature_loc):
+    """Fetch an Issue updated within the last 25 days matching the given origin and signature."""
+    try:
+        query = (
+            "SELECT id, version FROM issues"
+            " WHERE misc->'logspec'->'error'->>'signature_loc' = %s"
+            " AND origin = %s"
+            " AND _timestamp >= NOW() - INTERVAL '25 days'"
+        )
+        cursor.execute(query, (signature_loc, origin))
+        issues = cursor.fetchall()
+        if issues:
+            logging.debug("Issues: %r", issues)
+            return issues[0]
+    except Exception as e:
+        logging.exception("Error fetching unprocessed builds: %s", e)
+    return None
+
+
+def generate_issues_and_incidents(cursor, result_id, log_file, test_type, origin):
     parsed_data = {
         "issue_node": [],
         "incident_node": [],
@@ -219,13 +252,15 @@ def generate_issues_and_incidents(result_id, log_file, test_type, origin):
     parser = test_types[test_type]["parser"]
     error_list, new_status = process_log(log_file, parser, start_state)
     for error in error_list:
+        issue_id = ""
+        issue_version = None
         if error and error["error"].get("signature"):
             # do not generate issues for error_return_code since they are not
             # fatal, avoid noise.
             if error["error"].get("error_type") == "linux.kernel.error_return_code":
                 continue
 
-            issue = new_issue(error, test_type, origin)
+            issue = get_or_create_issue(cursor, error, test_type, origin)
             parsed_data["issue_node"].append(issue)
             issue_id = issue["id"]
             issue_version = issue["version"]
