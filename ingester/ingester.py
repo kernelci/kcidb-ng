@@ -173,7 +173,7 @@ def set_log_excerpt_ofile(build, url):
     Clean log_excerpt field
     Create name/url dict and append to output_files of job
     """
-    build["log_excerpt"] = None
+    build["log_excerpt"] = ""
     data = {
         "name": "log_excerpt",
         "url": url,
