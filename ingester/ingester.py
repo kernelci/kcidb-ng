@@ -38,6 +38,7 @@ import gzip
 DATABASE = "postgresql:dbname=kcidb user=kcidb password=kcidb host=localhost port=5432"
 VERBOSE = 0
 STORAGE_TOKEN = os.environ.get("STORAGE_TOKEN", None)
+STORAGE_BASE_URL = os.environ.get("STORAGE_BASE_URL", None)
 LOGEXCERPT_THRESHOLD = 256  # 256 bytes threshold for logexcerpt
 CONVERT_LOG_EXCERPT = False  # If True, convert log_excerpt to output_files url
 CACHE_LOGS = {}
@@ -111,7 +112,6 @@ def upload_logexcerpt(logexcerpt, id):
     """
     Upload logexcerpt to storage and return a reference(URL)
     """
-    STORAGE_BASE_URL = "https://files-staging.kernelci.org"
     upload_url = f"{STORAGE_BASE_URL}/upload"
     if VERBOSE:
         logger.info(f"Uploading logexcerpt for {id} to {upload_url}")
@@ -190,8 +190,9 @@ def extract_log_excerpt(input_data):
     Extract log_excerpt from builds and tests, if it is large,
     upload to storage and replace with a reference
     """
-    if not STORAGE_TOKEN:
-        logger.warning("STORAGE_TOKEN is not set, log_excerpts will not be uploaded")
+    if not STORAGE_TOKEN or not STORAGE_BASE_URL:
+        logger.warning("STORAGE_TOKEN or STORAGE_BASE_URL "
+                       "is not set, log_excerpts will not be uploaded")
         return input_data
 
     builds = input_data.get("builds", [])
