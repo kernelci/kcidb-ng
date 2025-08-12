@@ -1,25 +1,8 @@
 #!/bin/bash
 
-NEED_SUDO=0
-
-# Check if we need sudo to run Docker commands
-if ! docker ps > /dev/null 2>&1; then
-  if ! sudo docker ps > /dev/null 2>&1; then
-    echo "Docker is not running or you do not have permission to run Docker commands."
-    exit 1
-  else
-    #echo "Running Docker commands with sudo."
-    NEED_SUDO=1
-  fi
-fi
-
 # if first argument is "down" then run docker compose down
 if [ "$1" == "down" ]; then
-  if [ $NEED_SUDO -eq 1 ]; then
-    sudo docker compose --profile=self-hosted down
-  else
-    docker compose --profile=self-hosted down
-  fi
+  docker compose --profile=self-hosted down
   echo "Docker containers stopped and removed."
   exit 0
 fi
@@ -34,13 +17,8 @@ if [ "$1" == "clean" ]; then
     exit 0
   fi
 
-  if [ $NEED_SUDO -eq 1 ]; then
-    sudo docker compose --profile=self-hosted down --volumes --remove-orphans
-    sudo rm -rf ./config/* ./logspec-worker/logspec_worker.yaml ./db .env
-  else
-    docker compose --profile=self-hosted down --volumes --remove-orphans
-    rm -rf ./config/* ./logspec-worker/logspec_worker.yaml ./db .env
-  fi
+  docker compose --profile=self-hosted down --volumes --remove-orphans
+  rm -rf ./config/* ./logspec-worker/logspec_worker.yaml ./db .env
   echo "Docker containers, volumes, and networks removed."
   exit 0
 fi
@@ -65,11 +43,7 @@ JWT_SECRET=${RND_JWT_SECRET}" > .env
     echo ".env file already exists, skipping creation."
   fi
 
-  if [ $NEED_SUDO -eq 1 ]; then
-    sudo docker compose --profile=self-hosted up -d --build
-  else
-    docker compose --profile=self-hosted up -d --build
-  fi
+  docker compose --profile=self-hosted up -d --build
 
   if [ ! -f config/logspec_worker.yaml ]; then
       echo "logspec_worker.yaml not found, copying example"
@@ -84,5 +58,3 @@ echo "Usage: $0 [down|clean|run]"
 echo "  down   - Stop and remove Docker containers"
 echo "  clean  - Stop and remove all Docker containers, volumes, and networks"
 echo "  run    - Start Docker containers in detached mode"
-
-
