@@ -178,7 +178,9 @@ async fn auth_test(
 ) -> impl IntoResponse {
     let auth_result = verify_auth(headers, state.clone());
     match auth_result {
-        Ok(()) => (),
+        Ok(jwt) => {
+            println!("Authentication successful for origin: {}", jwt.origin);
+        }
         Err(e) => {
             println!("Error: {}", e);
             let jsanswer = generate_answer("error", "0", Some(e));
@@ -307,10 +309,13 @@ async fn main() {
     }
 }
 
-fn verify_auth(headers: HeaderMap, state: Arc<AppState>) -> Result<(), String> {
-    // if secret is empty, return Ok
+fn verify_auth(headers: HeaderMap, state: Arc<AppState>) -> Result<JWT, String> {
     if state.jwt_secret.is_empty() {
-        return Ok(());
+        // If no secret, return a default JWT or handle as needed
+        return Ok(JWT {
+            origin: "none".to_string(),
+            gendate: "none".to_string(),
+        });
     }
     let jwt_r = headers.get("Authorization");
     let jwt = match jwt_r {
@@ -329,7 +334,7 @@ fn verify_auth(headers: HeaderMap, state: Arc<AppState>) -> Result<(), String> {
     };
     let jwt = verify_jwt(jwt_str, &state.jwt_secret);
     match jwt {
-        Ok(_jwt) => Ok(()),
+        Ok(jwt) => Ok(jwt),
         Err(e) => Err(e.to_string()),
     }
 }
@@ -359,7 +364,9 @@ async fn submission_status(
 ) -> impl IntoResponse {
     let auth_result = verify_auth(headers, state.clone());
     match auth_result {
-        Ok(()) => (),
+        Ok(jwt) => {
+            println!("Authentication successful for origin: {}", jwt.origin);
+        }
         Err(e) => {
             println!("Error: {}", e);
             let jsanswer = generate_answer("error", "0", Some(e));
@@ -420,8 +427,11 @@ async fn receive_submission(
     body: String,
 ) -> impl IntoResponse {
     let auth_result = verify_auth(headers, state.clone());
+    let origin: String;
     match auth_result {
-        Ok(()) => (),
+        Ok(jwt) => {
+            origin = jwt.origin;
+        }
         Err(e) => {
             println!("Error: {}", e);
             let err_status = SubmissionStatus {
@@ -441,7 +451,7 @@ async fn receive_submission(
     match submission_json {
         Ok(_submission) => {
             let size = body.len();
-            println!("Received submission size: {}", size);
+            println!("Received submission size: {} from {} ", size, origin);
             let submission_id = random_string(32);
             let submission_file =
                 format!("{}/submission-{}.json.temp", state.directory, submission_id);
