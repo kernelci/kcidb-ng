@@ -36,7 +36,7 @@ import gzip
 
 # default database
 DATABASE = "postgresql:dbname=kcidb user=kcidb password=kcidb host=localhost port=5432"
-VERBOSE = 0
+VERBOSE = os.environ.get("KCIDB_VERBOSE", 0)
 STORAGE_TOKEN = os.environ.get("STORAGE_TOKEN", None)
 STORAGE_BASE_URL = os.environ.get("STORAGE_BASE_URL", None)
 LOGEXCERPT_THRESHOLD = 256  # 256 bytes threshold for logexcerpt
@@ -45,6 +45,12 @@ CACHE_LOGS = {}
 cache_logs_lock = threading.Lock()
 
 logger = logging.getLogger('ingester')
+if VERBOSE:
+    logging.basicConfig(level=logging.DEBUG)
+    logging.getLogger('ingester').setLevel(logging.DEBUG)
+else:
+    logging.basicConfig(level=logging.WARNING)
+    logging.getLogger('ingester').setLevel(logging.WARNING)
 
 # Thread-safe queue for database operations
 db_queue = Queue()
@@ -476,11 +482,6 @@ def cache_logs_maintenance():
 def main():
     global VERBOSE, CONVERT_LOG_EXCERPT
     # read from environment variable KCIDB_VERBOSE
-    VERBOSE = int(os.environ.get("KCIDB_VERBOSE", 0))
-    if VERBOSE:
-        logging.basicConfig(level=logging.INFO)
-    else:
-        logging.basicConfig(level=logging.WARNING)
     CONVERT_LOG_EXCERPT = os.environ.get("CONVERT_LOG_EXCERPT", "False").lower() in ("true", "1", "yes")
 
     parser = argparse.ArgumentParser()
