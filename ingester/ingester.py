@@ -366,7 +366,7 @@ def process_file(filename, trees_name, spool_dir, io_schema):
     return True
 
 
-def ingest_submissions_parallel(spool_dir, trees_name, db_client=None, max_workers=5):
+def ingest_submissions_parallel(spool_dir, trees_name, db_client=None, max_workers=20):
     """
     Ingest submissions in parallel using ThreadPoolExecutor for I/O operations
     and a single database worker thread.
@@ -486,7 +486,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--spool-dir", type=str, required=True)
     parser.add_argument("--verbose", type=int, default=VERBOSE)
-    parser.add_argument("--max-workers", type=int, default=5, 
+    parser.add_argument("--max-workers", type=int, default=20, 
                         help="Maximum number of parallel workers for file processing")
     args = parser.parse_args()
     
