@@ -108,7 +108,7 @@ def standardize_trees_name(input_data, trees_name):
     return input_data
 
 
-def upload_logexcerpt(logexcerpt, id):
+def upload_logexcerpt_proc(logexcerpt, id):
     """
     Upload logexcerpt to storage and return a reference(URL)
     """
@@ -140,13 +140,27 @@ def upload_logexcerpt(logexcerpt, id):
         except Exception as e:
             logger.error(f"Error uploading logexcerpt for {id}: {e}")
             os.remove(logexcerpt_filename)
-            return logexcerpt  # Return original logexcerpt if upload fails
+            return None
     os.remove(logexcerpt_filename)
     if r.status_code != 200:
         logger.error(f"Failed to upload logexcerpt for {id}: {r.status_code} : {r.text}")
-        return logexcerpt  # Return original logexcerpt if upload fails
+        return None
 
     return f"{STORAGE_BASE_URL}/logexcerpt/{id}/logexcerpt.txt.gz"
+
+
+def upload_logexcerpt(logexcerpt, id):
+    """
+    Upload logexcerpt with retries on failure
+    """
+    max_retries = 10
+    for attempt in range(max_retries):
+        result = upload_logexcerpt_proc(logexcerpt, id)
+        if result:
+            return result
+        logger.warning(f"Retrying upload_logexcerpt for {id} (attempt {attempt + 1})")
+        time.sleep(2 * attempt) # Increase delay with each attempt
+    return None
 
 
 def get_from_cache(log_hash):
@@ -212,8 +226,9 @@ def extract_log_excerpt(input_data):
                     set_log_excerpt_ofile(build, cached_url)
                 else:
                     cached_url = upload_logexcerpt(log_excerpt, log_hash)
-                    set_in_cache(log_hash, cached_url)
-                    set_log_excerpt_ofile(build, cached_url)
+                    if cached_url:
+                        set_in_cache(log_hash, cached_url)
+                        set_log_excerpt_ofile(build, cached_url)
 
     for test in tests:
         if test.get("log_excerpt"):
@@ -231,8 +246,9 @@ def extract_log_excerpt(input_data):
                     set_log_excerpt_ofile(test, cached_url)
                 else:
                     cached_url = upload_logexcerpt(log_excerpt, log_hash)
-                    set_in_cache(log_hash, cached_url)
-                    set_log_excerpt_ofile(test, cached_url)
+                    if cached_url:
+                        set_in_cache(log_hash, cached_url)
+                        set_log_excerpt_ofile(test, cached_url)
 
     return input_data
 
