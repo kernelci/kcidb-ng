@@ -117,7 +117,7 @@ def get_logspec_errors(parsed_data, parser):
             k: v for k, v in vars(error).items() if v and not k.startswith("_")
         }
         logspec_dict["error"]["signature"] = error._signature
-        logspec_dict["error"]["signature_loc"] = error._signature_loc
+        logspec_dict["error"]["signature_loc"] = getattr(error, '_signature_loc', error._signature)
         logspec_dict["error"]["log_excerpt"] = error._report
         logspec_dict["error"]["signature_fields"] = {
             field: getattr(error, field) for field in error._signature_fields
