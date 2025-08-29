@@ -22,7 +22,16 @@ if [ "$1" == "clean" ]; then
   exit 0
 fi
 
-if [ "$1" == "run" ]; then
+if [ "$1" == "update" ]; then
+  cd dashboard
+  git pull --ff
+  cd ..
+  docker compose -f docker-compose-all.yaml --profile=self-hosted pull
+  docker compose -f docker-compose-all.yaml --profile=self-hosted up -d --build
+  exit 0
+fi
+
+if [[ "$1" == "run" || "$1" == "up" ]]; then
   # Check if dashboard cloned
   if [ ! -d dashboard ]; then
     git clone https://github.com/kernelci/dashboard
@@ -89,8 +98,9 @@ fi
 
 # If no arguments are provided, show usage
 echo "This script will install fully operational self-hosted instance of kcidb-ng and KernelCI dashboard"
-echo "Usage: $0 [down|clean|run]"
-echo "  down   - Stop and remove Docker containers"
-echo "  clean  - Stop and remove all Docker containers, volumes, and networks"
-echo "  run    - Start Docker containers in detached mode"
-echo "  logs   - View logs for all Docker containers"
+echo "Usage: $0 [down|clean|run|up|logs|update"
+echo "  down      - Stop and remove Docker containers"
+echo "  clean     - Stop and remove all Docker containers, volumes, and networks"
+echo "  run or up - Start Docker containers in detached mode"
+echo "  logs      - View logs for all Docker containers"
+echo "  update    - Update components to latest versions"
