@@ -27,6 +27,7 @@ if [ "$1" == "update" ]; then
   git pull --ff
   cd ..
   docker compose -f docker-compose-all.yaml --profile=self-hosted pull
+  docker compose -f docker-compose-all.yaml --profile=self-hosted build dashboard
   docker compose -f docker-compose-all.yaml --profile=self-hosted up -d --build
   exit 0
 fi

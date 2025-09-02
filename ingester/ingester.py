@@ -318,6 +318,8 @@ def process_items_merging(db_client, items):
         "checkouts": [],
         "builds": [],
         "tests": [],
+        "issues": [],
+        "incidents": [],
         "version": None,
     }
 
@@ -326,6 +328,8 @@ def process_items_merging(db_client, items):
         merged["checkouts"].extend(data.get("checkouts", []))
         merged["builds"].extend(data.get("builds", []))
         merged["tests"].extend(data.get("tests", []))
+        merged["issues"].extend(data.get("issues", []))
+        merged["incidents"].extend(data.get("incidents", []))
         if merged["version"] is None:
             merged["version"] = data.get("version")
 
