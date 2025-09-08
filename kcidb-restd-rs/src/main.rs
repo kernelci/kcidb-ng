@@ -74,6 +74,8 @@ struct AppState {
     submission_counter: AtomicU64,
     submission_size_total: AtomicU64,
     error_counter: AtomicU64,
+    system_error_counter: AtomicU64,
+    user_error_counter: AtomicU64,
     start_time: std::time::Instant,
 }
 
@@ -129,6 +131,18 @@ async fn submission_metrics(
         "kcidb_errors_total {}\n",
         state.error_counter.load(Ordering::Relaxed)
     ));
+    metrics.push_str("# HELP kcidb_system_errors_total Total number of system errors encountered\n");
+    metrics.push_str("# TYPE kcidb_system_errors_total counter\n");
+    metrics.push_str(&format!(
+        "kcidb_system_errors_total {}\n",
+        state.system_error_counter.load(Ordering::Relaxed)
+    ));
+    metrics.push_str("# HELP kcidb_user_errors_total Total number of user errors encountered\n");
+    metrics.push_str("# TYPE kcidb_user_errors_total counter\n");
+    metrics.push_str(&format!(
+        "kcidb_user_errors_total {}\n",
+        state.user_error_counter.load(Ordering::Relaxed)
+    ));
     // number of json files in the spool directory
     metrics.push_str(
         "# HELP kcidb_json_files_total Total number of JSON files in the spool directory\n",
@@ -183,6 +197,7 @@ async fn auth_test(
         }
         Err(e) => {
             println!("Error: {}", e);
+            state.user_error_counter.fetch_add(1, Ordering::Relaxed);
             let jsanswer = generate_answer("error", "0", Some(e));
             return (StatusCode::UNAUTHORIZED, jsanswer);
         }
@@ -202,6 +217,8 @@ async fn main() {
         submission_counter: AtomicU64::new(0),
         submission_size_total: AtomicU64::new(0),
         error_counter: AtomicU64::new(0),
+        system_error_counter: AtomicU64::new(0),
+        user_error_counter: AtomicU64::new(0),
         start_time: std::time::Instant::now(),
     });
     let tls_key: String;
@@ -279,8 +296,17 @@ async fn main() {
             .with_state(app_state)
             .layer(limit_layer)
             .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));
-        let tcp_listener = TcpListener::bind((args.host, port)).await.unwrap();
-        axum::serve(tcp_listener, app).await.unwrap();
+        let tcp_listener = match TcpListener::bind((args.host.as_str(), port)).await {
+            Ok(listener) => listener,
+            Err(e) => {
+                eprintln!("Failed to bind to {}:{}: {}", args.host, port, e);
+                std::process::exit(1);
+            }
+        };
+        if let Err(e) = axum::serve(tcp_listener, app).await {
+            eprintln!("HTTP server failed: {}", e);
+            std::process::exit(1);
+        }
     } else {
         println!(
             "Starting HTTPS server with TLS key: {} and chain: {}",
@@ -297,15 +323,27 @@ async fn main() {
             .layer(limit_layer)
             .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));
         //let tcp_listener = TcpListener::bind((args.host, args.port)).await.unwrap();
-        let tls_config = RustlsConfig::from_pem_file(tls_chain, tls_key)
-            .await
-            .unwrap();
+        let tls_config = match RustlsConfig::from_pem_file(tls_chain, tls_key).await {
+            Ok(config) => config,
+            Err(e) => {
+                eprintln!("Failed to load TLS configuration: {}", e);
+                std::process::exit(1);
+            }
+        };
         let address = format!("{}:{}", args.host, port);
-        let addr = address.parse::<std::net::SocketAddr>().unwrap();
-        axum_server::bind_rustls(addr, tls_config)
+        let addr = match address.parse::<std::net::SocketAddr>() {
+            Ok(addr) => addr,
+            Err(e) => {
+                eprintln!("Failed to parse address {}: {}", address, e);
+                std::process::exit(1);
+            }
+        };
+        if let Err(e) = axum_server::bind_rustls(addr, tls_config)
             .serve(app.into_make_service())
-            .await
-            .unwrap();
+            .await {
+            eprintln!("HTTPS server failed: {}", e);
+            std::process::exit(1);
+        }
     }
 }
 
@@ -369,6 +407,7 @@ async fn submission_status(
         }
         Err(e) => {
             println!("Error: {}", e);
+            state.user_error_counter.fetch_add(1, Ordering::Relaxed);
             let jsanswer = generate_answer("error", "0", Some(e));
             return (StatusCode::UNAUTHORIZED, jsanswer);
         }
@@ -376,12 +415,14 @@ async fn submission_status(
     let id = query.id;
     // validate id for safe characters
     if id.is_empty() {
+        state.user_error_counter.fetch_add(1, Ordering::Relaxed);
         let jsanswer = generate_answer("error", "0", Some("Empty id".to_string()));
         return (StatusCode::BAD_REQUEST, jsanswer);
     }
 
     // id is alphanumeric
     if !id.chars().all(|c| c.is_alphanumeric()) {
+        state.user_error_counter.fetch_add(1, Ordering::Relaxed);
         let jsanswer = generate_answer("error", "0", Some("Invalid id".to_string()));
         return (StatusCode::BAD_REQUEST, jsanswer);
     }
@@ -415,6 +456,7 @@ async fn submission_status(
         return (StatusCode::OK, jsanswer);
     }
 
+    state.user_error_counter.fetch_add(1, Ordering::Relaxed);
     let jsanswer = generate_answer("notfound", id.as_str(), Some("File not found".to_string()));
     
     return (StatusCode::NOT_FOUND, jsanswer);
@@ -455,13 +497,32 @@ async fn receive_submission(
             let submission_id = random_string(32);
             let submission_file =
                 format!("{}/submission-{}.json.temp", state.directory, submission_id);
-            std::fs::write(&submission_file, &body).unwrap();
+            if let Err(e) = std::fs::write(&submission_file, &body) {
+                eprintln!("Failed to write submission file: {}", e);
+                state.system_error_counter.fetch_add(1, Ordering::Relaxed);
+                let err_status = SubmissionStatus {
+                    id: "0".to_string(),
+                    status: "error".to_string(),
+                    message: Some("Internal server error".to_string()),
+                };
+                let err_json = serde_json::to_string(&err_status).unwrap_or_default();
+                return (StatusCode::INTERNAL_SERVER_ERROR, err_json);
+            }
             // on completion, rename to submission.json
-            std::fs::rename(
+            if let Err(e) = std::fs::rename(
                 &submission_file,
                 format!("{}/submission-{}.json", state.directory, submission_id),
-            )
-            .unwrap();
+            ) {
+                eprintln!("Failed to rename submission file: {}", e);
+                state.system_error_counter.fetch_add(1, Ordering::Relaxed);
+                let err_status = SubmissionStatus {
+                    id: "0".to_string(),
+                    status: "error".to_string(),
+                    message: Some("Internal server error".to_string()),
+                };
+                let err_json = serde_json::to_string(&err_status).unwrap_or_default();
+                return (StatusCode::INTERNAL_SERVER_ERROR, err_json);
+            }
             println!("Submission {} received", submission_id);
             let msg = format!(
                 "Received submission {} with size {} bytes",
@@ -484,6 +545,7 @@ async fn receive_submission(
         }
         Err(e) => {
             println!("Error: {}", e);
+            state.user_error_counter.fetch_add(1, Ordering::Relaxed);
             let err_status = SubmissionStatus {
                 id: "0".to_string(),
                 status: "error".to_string(),
