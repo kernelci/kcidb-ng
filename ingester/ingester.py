@@ -313,6 +313,7 @@ def prepare_file_data(filename, trees_name, spool_dir, io_schema):
 def process_items_merging(db_client, items):
     """
     Process a list of items, merge, and insert them into the database.
+    TODO: On exception, we could try to insert items one by one to avoid losing all.
     """
     merged = {
         "checkouts": [],
@@ -335,7 +336,10 @@ def process_items_merging(db_client, items):
 
     if merged:
         with db_lock:
-            db_client.load(merged)
+            try:
+                db_client.load(merged)
+            except Exception as e:
+                logger.error(f"Error loading merged data into DB: {e}")
         logger.info(f"Processed {len(items)} items, merged into one document")
 
 
@@ -379,6 +383,8 @@ def db_worker(db_client, stop_event):
             continue  # Timeout occurred, continue to check stop_event
         except Exception as e:
             logger.error(f"Unexpected error in db_worker: {e}")
+            db_queue.task_done()  # Ensure we mark the task as done
+            continue
 
 
 def process_file(filename, trees_name, spool_dir, io_schema):
