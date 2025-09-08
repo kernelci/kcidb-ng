@@ -309,11 +309,30 @@ def prepare_file_data(filename, trees_name, spool_dir, io_schema):
             "error": str(e),
         }
 
+def process_items_separate(db_client, items):
+    """
+    Process a list of items and insert them into the database separately.
+    """
+    for data, metadata in items:
+        if data:
+            with db_lock:
+                try:
+                    db_client.load(data)
+                except Exception as e:
+                    logger.error(f"Error loading data into DB: {e}")
+            if VERBOSE:
+                logger.info(
+                    f"Processed file {metadata['filename']} size {metadata['fsize']} in {metadata['processing_time']:.2f} seconds"
+                )
+        else:
+            logger.error(
+                f"Skipping file {metadata['filename']} due to previous errors"
+            )
+
 
 def process_items_merging(db_client, items):
     """
     Process a list of items, merge, and insert them into the database.
-    TODO: On exception, we could try to insert items one by one to avoid losing all.
     """
     merged = {
         "checkouts": [],
@@ -340,6 +359,8 @@ def process_items_merging(db_client, items):
                 db_client.load(merged)
             except Exception as e:
                 logger.error(f"Error loading merged data into DB: {e}")
+                process_items_separate(db_client, items)
+                return
         logger.info(f"Processed {len(items)} items, merged into one document")
 
 
