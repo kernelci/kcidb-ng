@@ -309,6 +309,26 @@ def prepare_file_data(filename, trees_name, spool_dir, io_schema):
             "error": str(e),
         }
 
+def process_items_separate(db_client, items):
+    """
+    Process a list of items and insert them into the database separately.
+    """
+    for data, metadata in items:
+        if data:
+            with db_lock:
+                try:
+                    db_client.load(data)
+                except Exception as e:
+                    logger.error(f"Error loading data into DB: {e}")
+            if VERBOSE:
+                logger.info(
+                    f"Processed file {metadata['filename']} size {metadata['fsize']} in {metadata['processing_time']:.2f} seconds"
+                )
+        else:
+            logger.error(
+                f"Skipping file {metadata['filename']} due to previous errors"
+            )
+
 
 def process_items_merging(db_client, items):
     """
@@ -335,7 +355,12 @@ def process_items_merging(db_client, items):
 
     if merged:
         with db_lock:
-            db_client.load(merged)
+            try:
+                db_client.load(merged)
+            except Exception as e:
+                logger.error(f"Error loading merged data into DB: {e}")
+                process_items_separate(db_client, items)
+                return
         logger.info(f"Processed {len(items)} items, merged into one document")
 
 
@@ -379,6 +404,8 @@ def db_worker(db_client, stop_event):
             continue  # Timeout occurred, continue to check stop_event
         except Exception as e:
             logger.error(f"Unexpected error in db_worker: {e}")
+            db_queue.task_done()  # Ensure we mark the task as done
+            continue
 
 
 def process_file(filename, trees_name, spool_dir, io_schema):
