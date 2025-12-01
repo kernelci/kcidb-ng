@@ -8,6 +8,16 @@ origins:
       - checkouts
       - builds
       - tests
+    labs:
+      - lava-baylibre
+      - lava-broonie
+      - lava-cip
+      - lava-clabbe
+      - lava-collabora
+      - lava-collabora-staging
+      - lava-foundriesio
+      - lava-kci-qualcomm
+      - lava-pengutronix
 
   arm:
     description: "Arm device testing in Arm internal lab"
@@ -94,6 +104,8 @@ origins:
       - minas@ti.com
     submits:
       - tests
+    labs:
+      - opentest-ti
 
   0dayci:
     description: "Intel's 0-day test results in KernelCI"
