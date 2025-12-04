@@ -121,3 +121,22 @@ networks:
 #      - .env
 #    command: certonly --webroot -w /var/www/acme-challenge -d ${CERTBOT_DOMAIN} --email ${CERTBOT_EMAIL} --agree-tos --non-interactive --no-eff-email
 #    # For renewal, use: docker compose run --rm certbot renew
+
+# Certbot standalone mode - runs its own webserver on port 80
+# Use this when kcidb-rest is NOT running (e.g., initial cert setup or standalone renewal)
+# To use:
+#   1. Stop kcidb-rest: docker compose stop kcidb-rest
+#   2. Issue cert: docker compose --profile=certbot-standalone run --rm certbot-standalone
+#   3. Renew cert: docker compose --profile=certbot-standalone run --rm certbot-standalone renew
+#   4. Restart kcidb-rest: docker compose up -d kcidb-rest
+  certbot-standalone:
+    image: certbot/certbot
+    profiles: ["certbot-standalone"]
+    ports:
+      - "80:80"
+    volumes:
+      - ./certs:/etc/letsencrypt
+      - ./certs-data:/var/lib/letsencrypt
+    env_file:
+      - .env
+    command: certonly --standalone -d ${CERTBOT_DOMAIN} --email ${CERTBOT_EMAIL} --agree-tos --non-interactive --no-eff-email
