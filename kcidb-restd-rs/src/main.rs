@@ -186,6 +186,29 @@ async fn handle_root() -> impl IntoResponse {
     )
 }
 
+async fn serve_acme_challenge(
+    axum::extract::Path(token): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    // Check if ACME webroot is configured via environment variable
+    let acme_webroot = match std::env::var("ACME_WEBROOT") {
+        Ok(path) => path,
+        Err(_) => {
+            return (StatusCode::NOT_FOUND, "ACME challenge not configured".to_string());
+        }
+    };
+
+    // Validate token contains only safe characters (alphanumeric, dash, underscore)
+    if !token.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return (StatusCode::BAD_REQUEST, "Invalid token".to_string());
+    }
+
+    let challenge_path = format!("{}/{}", acme_webroot, token);
+    match tokio::fs::read_to_string(&challenge_path).await {
+        Ok(content) => (StatusCode::OK, content),
+        Err(_) => (StatusCode::NOT_FOUND, "Challenge not found".to_string()),
+    }
+}
+
 async fn auth_test(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
@@ -293,6 +316,7 @@ async fn main() {
             .route("/metrics", get(submission_metrics))
             .route("/health", get(|| async { "OK" }))
             .route("/authtest", get(auth_test))
+            .route("/.well-known/acme-challenge/{token}", get(serve_acme_challenge))
             .with_state(app_state)
             .layer(limit_layer)
             .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));
@@ -319,6 +343,7 @@ async fn main() {
             .route("/metrics", get(submission_metrics))
             .route("/health", get(|| async { "OK" }))
             .route("/authtest", get(auth_test))
+            .route("/.well-known/acme-challenge/{token}", get(serve_acme_challenge))
             .with_state(app_state)
             .layer(limit_layer)
             .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));

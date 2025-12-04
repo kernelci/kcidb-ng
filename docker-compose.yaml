@@ -12,6 +12,8 @@ services:
     volumes:
       - ./spool:/app/spool
       - ./certs:/etc/letsencrypt
+      # Uncomment to enable ACME challenge for certbot (also set ACME_WEBROOT in .env)
+      # - ./acme-challenge:/var/www/acme-challenge
     restart: unless-stopped
     networks:
       - kcidb
@@ -104,21 +106,18 @@ networks:
     name: kcidb
     driver: bridge
 
-# TODO: This is complicated to set up, due dashboard on same server
+# Certbot with webroot mode - uses ACME challenge served by kcidb-rest
+# To use:
+#   1. Uncomment the acme-challenge volume in kcidb-rest service
+#   2. Set ACME_WEBROOT=/var/www/acme-challenge in .env
+#   3. Run: docker compose run --rm certbot
 #  certbot:
 #    image: certbot/certbot
-#    ports:
-#      - "80:80"
 #    volumes:
 #      - ./certs:/etc/letsencrypt
 #      - ./certs-data:/var/lib/letsencrypt
-#    environment:
-#      - CERTBOT_DOMAIN=${CERTBOT_DOMAIN}
-#      - CERTBOT_EMAIL=${CERTBOT_EMAIL}
+#      - ./acme-challenge:/var/www/acme-challenge
 #    env_file:
 #      - .env
-#    # initially run certbot to get the certificate
-#    command: certonly --cert-name ${CERTBOT_DOMAIN} --standalone -d ${CERTBOT_DOMAIN} --email ${CERTBOT_EMAIL} --agree-tos --non-interactive --no-eff-email
-#    # Uncomment the following lines to run certbot in a loop, and comment the above line
-#    #entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-#    #restart: unless-stopped
+#    command: certonly --webroot -w /var/www/acme-challenge -d ${CERTBOT_DOMAIN} --email ${CERTBOT_EMAIL} --agree-tos --non-interactive --no-eff-email
+#    # For renewal, use: docker compose run --rm certbot renew
