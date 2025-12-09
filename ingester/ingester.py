@@ -33,6 +33,7 @@ from queue import Queue
 import queue
 import traceback
 import gzip
+from prometheus_client import Counter, start_http_server
 
 # default database
 DATABASE = "postgresql:dbname=kcidb user=kcidb password=kcidb host=localhost port=5432"
@@ -55,6 +56,28 @@ else:
 # Thread-safe queue for database operations
 db_queue = Queue()
 db_lock = threading.Lock()
+
+INGESTER_GRAFANA_LABEL = "original"
+
+FILES_INGESTER_COUNTER = Counter(
+    "kcidb_ingestions", "Number of files ingested", ["ingester"]
+)
+
+CHECKOUTS_COUNTER = Counter(
+    "kcidb_checkouts", "Number of checkouts ingested", ["ingester", "origin"]
+)
+ISSUES_COUNTER = Counter(
+    "kcidb_issues", "Number of issues ingested", ["ingester", "origin"]
+)
+BUILDS_COUNTER = Counter(
+    "kcidb_builds", "Number of builds ingested", ["ingester", "origin", "lab"]
+)
+TESTS_COUNTER = Counter(
+    "kcidb_tests", "Number of tests ingested", ["ingester", "origin", "lab", "platform"]
+)
+INCIDENTS_COUNTER = Counter(
+    "kcidb_incidents", "Number of incidents ingested", ["ingester", "origin"]
+)
 
 
 def get_db_credentials():
@@ -309,6 +332,36 @@ def prepare_file_data(filename, trees_name, spool_dir, io_schema):
             "error": str(e),
         }
 
+def count_objects(data):
+    def count_by_origin(items, counter):
+        for item in items:
+            origin = item.get("origin")
+            counter.labels(ingester=INGESTER_GRAFANA_LABEL, origin=origin).inc()
+
+    count_by_origin(data.get("checkouts", []), CHECKOUTS_COUNTER)
+    count_by_origin(data.get("issues", []), ISSUES_COUNTER)
+    count_by_origin(data.get("incidents", []), INCIDENTS_COUNTER)
+
+    for item in data.get("builds", []):
+        origin = item.get("origin")
+        item_misc = item.get("misc", {})
+        lab = item_misc.get("lab")
+        BUILDS_COUNTER.labels(ingester=INGESTER_GRAFANA_LABEL, origin=origin, lab=lab).inc()
+
+    for item in data.get("tests", []):
+        origin = item.get("origin")
+        item_misc = item.get("misc", {})
+        lab = item_misc.get("lab", item_misc.get("runtime"))
+        environment = item.get("environment", {})
+        env_misc = environment.get("misc", {})
+        platform = env_misc.get("platform")
+
+        TESTS_COUNTER.labels(
+            ingester=INGESTER_GRAFANA_LABEL, origin=origin, lab=lab, platform=platform
+        ).inc()
+
+
+
 def process_items_separate(db_client, items):
     """
     Process a list of items and insert them into the database separately.
@@ -318,6 +371,7 @@ def process_items_separate(db_client, items):
             with db_lock:
                 try:
                     db_client.load(data)
+                    count_objects(data)
                 except Exception as e:
                     logger.error(f"Error loading data into DB: {e}")
             if VERBOSE:
@@ -357,6 +411,7 @@ def process_items_merging(db_client, items):
         with db_lock:
             try:
                 db_client.load(merged)
+                count_objects(merged)
             except Exception as e:
                 logger.error(f"Error loading merged data into DB: {e}")
                 process_items_separate(db_client, items)
@@ -431,6 +486,7 @@ def process_file(filename, trees_name, spool_dir, io_schema):
 
     # Queue for database insertion
     db_queue.put((data, metadata))
+    FILES_INGESTER_COUNTER.labels(ingester=INGESTER_GRAFANA_LABEL).inc()
 
     # Archive the file after queuing (we can do this optimistically)
     try:
@@ -579,6 +635,10 @@ def main():
     VERBOSE = args.verbose
 
     logger.info("Starting ingestion process...")
+    start_http_server(int(os.environ.get("PROMETHEUS_PORT", 8002)))
+    logger.info(
+        f"Prometheus metrics server started on port {os.environ.get('PROMETHEUS_PORT', 8002)}"
+    )
     verify_spool_dirs(args.spool_dir)
     trees_name = load_trees_name()
     get_db_credentials()
