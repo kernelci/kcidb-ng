@@ -428,16 +428,30 @@ def db_worker(db_client, stop_event):
     items = []
     total_fsize = 0
     last_processed = time.time()
+    logger.info("db_worker started")
 
     while not stop_event.is_set() or not db_queue.empty():
         try:
             if len(items) >= 50 or total_fsize >= 10 * 1024 * 1024 or (len(items) > 0 and time.time() - last_processed >= 5):
+                logger.debug(f"db_worker: processing batch of {len(items)} items")
                 process_items_merging(db_client, items)
                 items = []
                 total_fsize = 0
                 last_processed = time.time()
-            item = db_queue.get(timeout=0.1)
+            
+            try:
+                item = db_queue.get(timeout=1) # increased timeout to reduce cpu usage in loop
+            except queue.Empty:
+                if len(items) > 0:
+                    logger.debug(f"db_worker: timeout, processing remaining {len(items)} items")
+                    process_items_merging(db_client, items)
+                    items = []
+                    total_fsize = 0
+                    last_processed = time.time()
+                continue
+
             if item is None:
+                logger.info("db_worker received poison pill")
                 if len(items) > 0:
                     process_items_merging(db_client, items)
                 db_queue.task_done()  # Important: mark the poison pill as done
@@ -450,17 +464,13 @@ def db_worker(db_client, stop_event):
                 logger.error(f"Error processing item in db_worker: {e}")
             finally:
                 db_queue.task_done()  # Always mark task as done, even if processing failed
-        except queue.Empty:
-            if len(items) > 0:
-                process_items_merging(db_client, items)
-                items = []
-                total_fsize = 0
-                last_processed = time.time()
-            continue  # Timeout occurred, continue to check stop_event
         except Exception as e:
             logger.error(f"Unexpected error in db_worker: {e}")
-            db_queue.task_done()  # Ensure we mark the task as done
+            # If we retrieved an item but failed before task_done, we might have an issue.
+            # But the inner try...finally handles task_done for the item.
+            # This outer except catches errors in the batch processing or queue.get logic.
             continue
+    logger.info("db_worker finished")
 
 
 def process_file(filename, trees_name, spool_dir, io_schema):
