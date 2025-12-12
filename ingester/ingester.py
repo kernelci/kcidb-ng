@@ -54,7 +54,7 @@ else:
     logging.getLogger("ingester").setLevel(logging.WARNING)
 
 # Thread-safe queue for database operations
-db_queue = Queue()
+db_queue = Queue(maxsize=500)
 db_lock = threading.Lock()
 
 INGESTER_GRAFANA_LABEL = "original"
@@ -158,7 +158,7 @@ def upload_logexcerpt_proc(logexcerpt, id):
         }
         files = {"file0": ("logexcerpt.txt.gz", f), "path": f"logexcerpt/{id}"}
         try:
-            r = requests.post(upload_url, headers=hdr, files=files)
+            r = requests.post(upload_url, headers=hdr, files=files, timeout=30)
         except Exception as e:
             logger.error(f"Error uploading logexcerpt for {id}: {e}")
             os.remove(logexcerpt_filename)
