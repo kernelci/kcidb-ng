@@ -145,10 +145,10 @@ async fn submission_metrics(
     ));
     // number of json files in the spool directory
     metrics.push_str(
-        "# HELP kcidb_json_files_total Total number of JSON files in the spool directory\n",
+        "# HELP kcidb_json_files Total number of JSON files in the spool directory\n",
     );
-    metrics.push_str("# TYPE kcidb_json_files_total gauge\n");
-    metrics.push_str(&format!("kcidb_json_files_total {}\n", json_files_num));
+    metrics.push_str("# TYPE kcidb_json_files gauge\n");
+    metrics.push_str(&format!("kcidb_json_files {}\n", json_files_num));
     // Uptime in seconds
     let uptime = state.start_time.elapsed().as_secs();
     metrics.push_str("# HELP kcidb_uptime_seconds Uptime of the server in seconds\n");
