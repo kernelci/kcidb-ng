@@ -17,19 +17,20 @@ services:
     restart: unless-stopped
     networks:
       - private
-# To disable JWT auth
-#    command: ["/usr/local/bin/kcidb-restd-rs","-j",""]
-  ingester:
+  # To disable JWT auth
+  #    command: ["/usr/local/bin/kcidb-restd-rs","-j",""]
+  django-ingester:
     build:
       context: .
-      dockerfile: Dockerfile.ingester
+      dockerfile: Dockerfile.django-ingester
     env_file:
       - .env
+    ports:
+      - "8002:${INGESTER_METRICS_PORT:=8002}"
     volumes:
       - ./spool:/app/spool
       - ./state:/app/state
       - ./cache:/app/cache
-    command: ["python", "/app/ingester.py", "--spool-dir", "/app/spool"]
     restart: unless-stopped
     networks:
       - private
