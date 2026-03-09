@@ -1,9 +1,7 @@
 # kcidb-rest interface workers
 services:
   kcidb-rest:
-    build:
-      context: .
-      dockerfile: Dockerfile.kcidb-rest-rs
+    image: ghcr.io/kernelci/kcidb-ng/kcidb-rest:latest
     env_file:
       - .env
     ports:
@@ -20,9 +18,7 @@ services:
 # To disable JWT auth
 #    command: ["/usr/local/bin/kcidb-restd-rs","-j",""]
   ingester:
-    build:
-      context: .
-      dockerfile: Dockerfile.django-ingester
+    image: ghcr.io/kernelci/kcidb-ng/django-ingester:latest
     env_file:
       - .env
     volumes:

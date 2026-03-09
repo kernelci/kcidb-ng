@@ -3,9 +3,7 @@ include:
   - path: ./dashboard/docker-compose.yml
 services:
   kcidb-rest:
-    build:
-      context: .
-      dockerfile: Dockerfile.kcidb-rest-rs
+    image: ghcr.io/kernelci/kcidb-ng/kcidb-rest:latest
     env_file:
       - .env
     ports:
@@ -19,6 +17,22 @@ services:
       - private
   # To disable JWT auth
   #    command: ["/usr/local/bin/kcidb-restd-rs","-j",""]
+  ingester:
+    image: ghcr.io/kernelci/kcidb-ng/django-ingester:latest
+    env_file:
+      - .env
+    volumes:
+      - ./spool:/app/spool
+      - ./state:/app/state
+      - ./cache:/app/cache
+    restart: unless-stopped
+    networks:
+      - private
+    depends_on:
+      db:
+        condition: service_healthy
+      dbinit:
+        condition: service_completed_successfully
   logspec-worker:
     build:
       context: .

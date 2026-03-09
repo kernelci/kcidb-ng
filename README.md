@@ -58,6 +58,12 @@ This script will:
 - Initialize the PostgreSQL database
 - Start the REST API, dashboard ingester, and logspec-worker services
 
+To run from local Dockerfiles (no GHCR image pulls), use:
+
+```bash
+./self-hosted.sh --dev run
+```
+
 Also available commands:
 - `./self-hosted.sh down` - Stops the services
 - `./self-hosted.sh clean` - Stops and removes all containers, configs, databases, networks, and volumes
@@ -84,17 +90,44 @@ JWT_SECRET=your_jwt_secret
 The self-hosted profile includes a local PostgreSQL database and an initialization service:
 
 ```bash
-sudo docker compose --profile=self-hosted up -d --build
+docker compose --profile=self-hosted up -d --build
 ```
 
 This command:
-- Builds and starts all necessary containers
+- Builds and/or pulls required images (as defined by compose files)
 - Sets up a local PostgreSQL database
 - Initializes the database schema
 - Starts the REST API, dashboard ingester, and logspec-worker services
 
 Note: By default it is expecting PostgreSQL to be running with default settings, except postgres password which is set to `kcidb`.
 It will also create a user `kcidb_editor` with password `kcidb` and a database `kcidb`, and user `kcidb_viewer` with password `kcidb` for read-only access.
+
+#### Compose modes
+
+This project now has two compose workflows:
+
+- Default mode uses images from GitHub Container Registry for `kcidb-rest` and `ingester` (as defined in `docker-compose.yaml` / `docker-compose-all.yaml`).
+- Local development mode rebuilds those images from local Dockerfiles by adding `docker-compose-dev.yaml`.
+
+Run with prebuilt images:
+
+```bash
+docker compose -f docker-compose.yaml up -d
+docker compose -f docker-compose-all.yaml up -d
+```
+
+Run local-source builds:
+
+```bash
+docker compose -f docker-compose.yaml -f docker-compose-dev.yaml up -d --build
+docker compose -f docker-compose-all.yaml -f docker-compose-dev.yaml up -d --build
+```
+
+For self-hosted local PostgreSQL with local builds:
+
+```bash
+docker compose -f docker-compose.yaml -f docker-compose-dev.yaml --profile=self-hosted up -d --build
+```
 
 ### Generating tokens
 
