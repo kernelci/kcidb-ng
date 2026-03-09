@@ -18,6 +18,7 @@ The system consists of several interconnected components:
    - Validates them against the KCIDB schema
    - Loads them into the KCIDB database
    - Archives processed submissions
+   This service has been replaced with [KernelCI Dashboard's implementation of the ingester](https://github.com/kernelci/dashboard/blob/main/backend/kernelCI_app/management/commands/monitor_submissions.py) and was left here just as a temporary and standalone usage.
 
 3. **logspec-worker** - A Python service that:
    - Monitors the database for failed tests and builds

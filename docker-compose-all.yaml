@@ -19,26 +19,6 @@ services:
       - private
   # To disable JWT auth
   #    command: ["/usr/local/bin/kcidb-restd-rs","-j",""]
-  django-ingester:
-    build:
-      context: .
-      dockerfile: Dockerfile.django-ingester
-    env_file:
-      - .env
-    ports:
-      - "8002:${INGESTER_METRICS_PORT:=8002}"
-    volumes:
-      - ./spool:/app/spool
-      - ./state:/app/state
-      - ./cache:/app/cache
-    restart: unless-stopped
-    networks:
-      - private
-    depends_on:
-      db:
-        condition: service_healthy
-      dbinit:
-        condition: service_completed_successfully
   logspec-worker:
     build:
       context: .
