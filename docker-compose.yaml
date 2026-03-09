@@ -57,16 +57,6 @@ services:
         condition: service_healthy
       dbinit:
         condition: service_completed_successfully
-  postgres:
-    container_name: 'postgres'
-    image: 'gcr.io/cloud-sql-connectors/cloud-sql-proxy:latest'
-    command: 'kernelci-production:us-central1:postgresql2 -c/config/db.json -a0.0.0.0'
-    volumes:
-      - './config:/config'
-    restart: on-failure
-    profiles: ["google-cloud-sql"]
-    networks:
-      - kcidb
   db:
     image: postgres:17
     container_name: 'postgres'

@@ -28,7 +28,6 @@ The system consists of several interconnected components:
 
 4. **PostgreSQL Database** - Stores all KCIDB data
    - Can be run locally (self-hosted mode)
-   - Can be connected to Google Cloud SQL (deprecated soon)
 
 ## Installation
 
@@ -96,16 +95,6 @@ This command:
 
 Note: By default it is expecting PostgreSQL to be running with default settings, except postgres password which is set to `kcidb`.
 It will also create a user `kcidb_editor` with password `kcidb` and a database `kcidb`, and user `kcidb_viewer` with password `kcidb` for read-only access.
-
-#### Google Cloud SQL Mode
-
-If you prefer to use Google Cloud SQL as your database:
-
-```bash
-docker compose --profile=google-cloud-sql up -d --build
-```
-
-Make sure to provide the appropriate credentials in your `.env` file.
 
 ### Generating tokens
 
