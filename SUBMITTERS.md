@@ -53,12 +53,7 @@ Here is how the current system architecture works:
 flowchart TD
     Users[Users]
 
-    subgraph GCP
-        KCIDBCloudSQL[KCIDB-CloudSQL]
-        KCIDBLegacyPubSub[KCIDB-Legacy-PubSub]
-    end
-
-    subgraph Azure
+    subgraph Infrastructure
         subgraph ServerREST
             KCIDBREST[KCIDB-REST]
             KCIDBlogspecworker[KCIDB-logspec-worker]
@@ -68,27 +63,20 @@ flowchart TD
         subgraph ServerDashboard
             Dashboard[Dashboard]
         end
+        Database[(PostgreSQL)]
     end
 
     %% Data flows
-    Users --> KCIDBLegacyPubSub
-    KCIDBLegacyPubSub --> KCIDBCloudSQL
-
     Users --> KCIDBREST
     KCIDBREST --> SubmissionSpool
 
     KCIDBingester -- polls --> SubmissionSpool
-    KCIDBingester --> KCIDBCloudSQL
+    KCIDBingester --> Database
 
-    KCIDBlogspecworker -- polls --> KCIDBCloudSQL
+    KCIDBlogspecworker -- polls --> Database
     KCIDBlogspecworker --> SubmissionSpool
 
-    Dashboard -- reads from --> KCIDBCloudSQL
-
-    %% Styles
-    classDef user fill:#6FCF97,stroke:#333,stroke-width:2px;
-    class Users user;
-
+    Dashboard -- reads from --> Database
 ```
 
 And this is how your submission will be processed:

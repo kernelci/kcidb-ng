@@ -1,0 +1,20 @@
+services:
+  kcidb-rest:
+    build:
+      context: .
+      dockerfile: Dockerfile.kcidb-rest-rs
+
+  ingester:
+    build:
+      context: .
+      dockerfile: Dockerfile.django-ingester
+
+  logspec-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.logspec-worker
+
+  dbinit:
+    build:
+      context: .
+      dockerfile: Dockerfile.dbinit

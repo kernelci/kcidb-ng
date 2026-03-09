@@ -1,9 +1,7 @@
 # kcidb-rest interface workers
 services:
   kcidb-rest:
-    build:
-      context: .
-      dockerfile: Dockerfile.kcidb-rest-rs
+    image: ghcr.io/kernelci/kcidb-ng/kcidb-rest:latest
     env_file:
       - .env
     ports:
@@ -20,16 +18,13 @@ services:
 # To disable JWT auth
 #    command: ["/usr/local/bin/kcidb-restd-rs","-j",""]
   ingester:
-    build:
-      context: .
-      dockerfile: Dockerfile.ingester
+    image: ghcr.io/kernelci/kcidb-ng/django-ingester:latest
     env_file:
       - .env
     volumes:
       - ./spool:/app/spool
       - ./state:/app/state
       - ./cache:/app/cache
-    command: ["python", "/app/ingester.py", "--spool-dir", "/app/spool"]
     restart: unless-stopped
     networks:
       - kcidb
@@ -58,16 +53,6 @@ services:
         condition: service_healthy
       dbinit:
         condition: service_completed_successfully
-  postgres:
-    container_name: 'postgres'
-    image: 'gcr.io/cloud-sql-connectors/cloud-sql-proxy:latest'
-    command: 'kernelci-production:us-central1:postgresql2 -c/config/db.json -a0.0.0.0'
-    volumes:
-      - './config:/config'
-    restart: on-failure
-    profiles: ["google-cloud-sql"]
-    networks:
-      - kcidb
   db:
     image: postgres:17
     container_name: 'postgres'

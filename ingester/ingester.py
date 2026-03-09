@@ -14,6 +14,10 @@
 # with this library; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+"""DEPRECATED: This ingester implementation is kept only for compatibility.
+Use the dashboard ingester (`monitor_submissions`) instead.
+"""
+
 import kcidb
 import tempfile
 import os

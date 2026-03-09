@@ -1,7 +1,19 @@
 #!/bin/bash
+
+if [ "$1" == "--dev" ]; then
+  shift
+  COMPOSE_FILES=(-f docker-compose-all.yaml -f docker-compose-dev.yaml)
+else
+  COMPOSE_FILES=(-f docker-compose-all.yaml)
+fi
+
+compose() {
+  docker compose "${COMPOSE_FILES[@]}" "$@"
+}
+
 # if first argument is "down" then run docker compose down
 if [ "$1" == "down" ]; then
-  docker compose -f docker-compose-all.yaml --profile=self-hosted down
+  compose --profile=self-hosted down
   echo "Docker containers stopped and removed."
   exit 0
 fi
@@ -16,7 +28,7 @@ if [ "$1" == "clean" ]; then
     exit 0
   fi
 
-  docker compose -f docker-compose-all.yaml --profile=self-hosted down --volumes --remove-orphans
+  compose --profile=self-hosted down --volumes --remove-orphans
   rm -rf ./config/* ./logspec-worker/logspec_worker.yaml ./db .env
   echo "Docker containers, volumes, and networks removed."
   exit 0
@@ -26,9 +38,9 @@ if [ "$1" == "update" ]; then
   cd dashboard
   git pull --ff
   cd ..
-  docker compose -f docker-compose-all.yaml --profile=self-hosted pull
-  docker compose -f docker-compose-all.yaml --profile=self-hosted build dashboard
-  docker compose -f docker-compose-all.yaml --profile=self-hosted up -d --build
+  compose --profile=self-hosted pull
+  compose --profile=self-hosted build dashboard
+  compose --profile=self-hosted up -d --build
   exit 0
 fi
 
@@ -49,6 +61,7 @@ if [[ "$1" == "run" || "$1" == "up" ]]; then
     echo "# PostgreSQL configuration
 POSTGRES_PASSWORD=kcidb
 PG_PASS=kcidb
+DB_DEFAULT_PASSWORD=kcidb
 PG_URI=postgresql:dbname=kcidb user=kcidb_editor password=kcidb host=db port=5432
 # Programs will be more talkative if this is set, in production might want to set to 0
 KCIDB_VERBOSE=1
@@ -82,7 +95,7 @@ JWT_SECRET=${RND_JWT_SECRET}" > .env
     echo "$PG_PASS" >dashboard/backend/runtime/secrets/postgres_password_secret
   fi
 
-  docker compose -f docker-compose-all.yaml --profile=self-hosted up -d --build
+  compose --profile=self-hosted up -d --build
 
   if [ ! -f config/logspec_worker.yaml ]; then
       echo "logspec_worker.yaml not found, copying example"
@@ -93,13 +106,14 @@ JWT_SECRET=${RND_JWT_SECRET}" > .env
 fi
 
 if [ "$1" == "logs" ]; then
-  docker compose -f docker-compose-all.yaml --profile=self-hosted logs -f
+  compose --profile=self-hosted logs -f
   exit 0
 fi
 
 # If no arguments are provided, show usage
 echo "This script will install fully operational self-hosted instance of kcidb-ng and KernelCI dashboard"
-echo "Usage: $0 [down|clean|run|up|logs|update"
+echo "Usage: $0 [--dev] [down|clean|run|up|logs|update]"
+echo "  --dev     - Use local compose overrides in docker-compose-dev.yaml"
 echo "  down      - Stop and remove Docker containers"
 echo "  clean     - Stop and remove all Docker containers, volumes, and networks"
 echo "  run or up - Start Docker containers in detached mode"

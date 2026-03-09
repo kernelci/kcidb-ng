@@ -28,7 +28,6 @@ The system consists of several interconnected components:
 
 4. **PostgreSQL Database** - Stores all KCIDB data
    - Can be run locally (self-hosted mode)
-   - Can be connected to Google Cloud SQL (deprecated soon)
 
 ## Installation
 
@@ -44,6 +43,10 @@ git clone https://github.com/kernelci/kcidb-ng.git
 cd kcidb-ng
 ```
 
+The legacy `ingester/ingester.py` implementation is deprecated and kept for compatibility only.
+Current compose setups use the dashboard-backed ingester (`monitor_submissions`), built from `Dockerfile.django-ingester`.
+Planned removal of the deprecated ingester is April 30, 2026.
+
 ### Quick Start (recommended)
 To quickly start the KCIDB-ng services with a local PostgreSQL database, run:
 
@@ -53,7 +56,13 @@ To quickly start the KCIDB-ng services with a local PostgreSQL database, run:
 This script will:
 - Build and start the Docker containers
 - Initialize the PostgreSQL database
-- Start the REST API, ingester, and logspec-worker services
+- Start the REST API, dashboard ingester, and logspec-worker services
+
+To run from local Dockerfiles (no GHCR image pulls), use:
+
+```bash
+./self-hosted.sh --dev run
+```
 
 Also available commands:
 - `./self-hosted.sh down` - Stops the services
@@ -81,27 +90,44 @@ JWT_SECRET=your_jwt_secret
 The self-hosted profile includes a local PostgreSQL database and an initialization service:
 
 ```bash
-sudo docker compose --profile=self-hosted up -d --build
+docker compose --profile=self-hosted up -d --build
 ```
 
 This command:
-- Builds and starts all necessary containers
+- Builds and/or pulls required images (as defined by compose files)
 - Sets up a local PostgreSQL database
 - Initializes the database schema
-- Starts the REST API, ingester, and logspec-worker services
+- Starts the REST API, dashboard ingester, and logspec-worker services
 
 Note: By default it is expecting PostgreSQL to be running with default settings, except postgres password which is set to `kcidb`.
 It will also create a user `kcidb_editor` with password `kcidb` and a database `kcidb`, and user `kcidb_viewer` with password `kcidb` for read-only access.
 
-#### Google Cloud SQL Mode
+#### Compose modes
 
-If you prefer to use Google Cloud SQL as your database:
+This project now has two compose workflows:
+
+- Default mode uses images from GitHub Container Registry for `kcidb-rest` and `ingester` (as defined in `docker-compose.yaml` / `docker-compose-all.yaml`).
+- Local development mode rebuilds those images from local Dockerfiles by adding `docker-compose-dev.yaml`.
+
+Run with prebuilt images:
 
 ```bash
-docker compose --profile=google-cloud-sql up -d --build
+docker compose -f docker-compose.yaml up -d
+docker compose -f docker-compose-all.yaml up -d
 ```
 
-Make sure to provide the appropriate credentials in your `.env` file.
+Run local-source builds:
+
+```bash
+docker compose -f docker-compose.yaml -f docker-compose-dev.yaml up -d --build
+docker compose -f docker-compose-all.yaml -f docker-compose-dev.yaml up -d --build
+```
+
+For self-hosted local PostgreSQL with local builds:
+
+```bash
+docker compose -f docker-compose.yaml -f docker-compose-dev.yaml --profile=self-hosted up -d --build
+```
 
 ### Generating tokens
 
@@ -208,4 +234,3 @@ docker exec -it logspec-worker python /app/logspec_worker.py --spool-dir /app/sp
 ## License
 
 This project is licensed under the [LGPL-2.1 license](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html).
-
