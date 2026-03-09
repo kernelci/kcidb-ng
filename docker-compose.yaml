@@ -22,14 +22,13 @@ services:
   ingester:
     build:
       context: .
-      dockerfile: Dockerfile.ingester
+      dockerfile: Dockerfile.django-ingester
     env_file:
       - .env
     volumes:
       - ./spool:/app/spool
       - ./state:/app/state
       - ./cache:/app/cache
-    command: ["python", "/app/ingester.py", "--spool-dir", "/app/spool"]
     restart: unless-stopped
     networks:
       - kcidb

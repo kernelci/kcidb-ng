@@ -44,6 +44,10 @@ git clone https://github.com/kernelci/kcidb-ng.git
 cd kcidb-ng
 ```
 
+The legacy `ingester/ingester.py` implementation is deprecated and kept for compatibility only.
+Current compose setups use the dashboard-backed ingester (`monitor_submissions`), built from `Dockerfile.django-ingester`.
+Planned removal of the deprecated ingester is April 30, 2026.
+
 ### Quick Start (recommended)
 To quickly start the KCIDB-ng services with a local PostgreSQL database, run:
 
@@ -53,7 +57,7 @@ To quickly start the KCIDB-ng services with a local PostgreSQL database, run:
 This script will:
 - Build and start the Docker containers
 - Initialize the PostgreSQL database
-- Start the REST API, ingester, and logspec-worker services
+- Start the REST API, dashboard ingester, and logspec-worker services
 
 Also available commands:
 - `./self-hosted.sh down` - Stops the services
@@ -88,7 +92,7 @@ This command:
 - Builds and starts all necessary containers
 - Sets up a local PostgreSQL database
 - Initializes the database schema
-- Starts the REST API, ingester, and logspec-worker services
+- Starts the REST API, dashboard ingester, and logspec-worker services
 
 Note: By default it is expecting PostgreSQL to be running with default settings, except postgres password which is set to `kcidb`.
 It will also create a user `kcidb_editor` with password `kcidb` and a database `kcidb`, and user `kcidb_viewer` with password `kcidb` for read-only access.
@@ -208,4 +212,3 @@ docker exec -it logspec-worker python /app/logspec_worker.py --spool-dir /app/sp
 ## License
 
 This project is licensed under the [LGPL-2.1 license](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html).
-

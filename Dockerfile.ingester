@@ -1,5 +1,8 @@
 FROM python:3.13-bookworm
 
+# Deprecated: this image builds the legacy ingester implementation (ingester/ingester.py).
+# Prefer Dockerfile.django-ingester for production/active deployments.
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y git
