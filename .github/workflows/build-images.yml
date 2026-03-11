@@ -14,8 +14,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: django-ingester
-            dockerfile: Dockerfile.django-ingester
           - name: kcidb-rest
             dockerfile: Dockerfile.kcidb-rest-rs
     steps:
