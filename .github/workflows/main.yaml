@@ -46,3 +46,18 @@ jobs:
           }
           docker compose -f docker-compose.yaml pull
           docker compose -f docker-compose.yaml up -d --remove-orphans
+
+          # Ensure Dozzle (Docker log viewer) is running with latest image
+          docker pull amir20/dozzle:latest || echo "WARNING: Failed to pull latest Dozzle image, using cached version"
+          if docker ps -q -f name=dozzle | grep -q .; then
+            echo "Dozzle is already running, restarting with latest image..."
+            docker stop dozzle
+            docker rm dozzle
+          elif docker ps -aq -f name=dozzle | grep -q .; then
+            echo "Dozzle container exists but is stopped, removing..."
+            docker rm dozzle
+          fi
+          docker run -d --name dozzle --restart unless-stopped \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -p 127.0.0.1:8080:8080 \
+            amir20/dozzle:latest
