@@ -37,11 +37,11 @@ services:
           - ./cache:/app/cache
       restart: always
       networks:
-          - private
-          - public
-      depends_on:
-          - redis
-      profiles: ["with_commands"]
+        - kcidb
+
+#      depends_on:
+#          - redis
+#      profiles: ["with_commands"]
 
   pending_aggregations_processor:
       image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_OWNER:-kernelci}/${IMAGE_REPOSITORY:-dashboard}/dashboard-backend:${IMAGE_TAG:-latest}
@@ -59,11 +59,11 @@ services:
           SKIP_CRONJOBS: "True"
       restart: always
       networks:
-          - private
-          - public
-      depends_on:
-          - redis
-      profiles: ["with_commands"]
+        - kcidb
+
+#      depends_on:
+#          - redis
+#      profiles: ["with_commands"]
 
   # TODO: conver to image too, or move to dashboard
   logspec-worker:
@@ -81,11 +81,11 @@ services:
     restart: unless-stopped
     networks:
       - kcidb
-    depends_on:
-      db:
-        condition: service_healthy
-      dbinit:
-        condition: service_completed_successfully
+#    depends_on:
+#      db:
+#        condition: service_healthy
+#      dbinit:
+#        condition: service_completed_successfully
   db:
     image: postgres:17
     container_name: 'postgres'
