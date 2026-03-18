@@ -30,7 +30,7 @@ jobs:
         username: ${{ secrets.DB_SSH_USER }}
         key: ${{ secrets.DB_SSH_KEY }}
         source: "docker-compose.yaml"
-        target: "~/kcidb-ng/docker-compose.yaml"
+        target: "~/kcidb-ng/"
     - name: Pull and start new instance over ssh
       uses: appleboy/ssh-action@v1
       with:
