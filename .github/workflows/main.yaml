@@ -1,10 +1,6 @@
 name: Deploy production
-#on:
-#  push:
-#    branches: [main]
 on:
   workflow_dispatch:
-
 
 jobs:
   deploy:
@@ -12,7 +8,7 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Deploy over SSH
+    - name: Shutdown old instance over ssh
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ secrets.DB_SSH_HOST }}
@@ -20,6 +16,22 @@ jobs:
         key: ${{ secrets.DB_SSH_KEY }}
         script: |
           cd kcidb-ng
-          git pull --ff-only
+          docker compose down
+    - name: Copy new docker-compose file over ssh
+      uses: appleboy/scp-action@v1
+      with:
+        host: ${{ secrets.DB_SSH_HOST }}
+        username: ${{ secrets.DB_SSH_USER }}
+        key: ${{ secrets.DB_SSH_KEY }}
+        source: "docker-compose.yaml"
+        target: "~/kcidb-ng/docker-compose.yaml"
+    - name: Pull and start new instance over ssh
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ secrets.DB_SSH_HOST }}
+        username: ${{ secrets.DB_SSH_USER }}
+        key: ${{ secrets.DB_SSH_KEY }}
+        script: |
+          cd kcidb-ng
           docker compose pull
           docker compose up -d --remove-orphans
