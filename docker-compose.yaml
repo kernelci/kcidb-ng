@@ -31,7 +31,7 @@ services:
       environment:
           SKIP_CRONJOBS: "True"
       volumes:
-          - backend-data:${BACKEND_VOLUME_DIR:-/volume_data}
+          - ./backend-data:${BACKEND_VOLUME_DIR:-/volume_data}
           - ${INGESTER_SPOOL_DIR:-./spool}:/app/spool
           - ./state:/app/state
           - ./cache:/app/cache
