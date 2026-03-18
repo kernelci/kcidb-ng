@@ -15,8 +15,14 @@ jobs:
         username: ${{ secrets.DB_SSH_USER }}
         key: ${{ secrets.DB_SSH_KEY }}
         script: |
-          cd kcidb-ng
-          docker compose down
+          set -euo pipefail
+          if [ -d ~/kcidb-ng ] && [ -f ~/kcidb-ng/docker-compose.yaml ]; then
+            cd ~/kcidb-ng
+            docker compose -f docker-compose.yaml down
+          else
+            echo "No existing deployment found in ~/kcidb-ng."
+            exit 0
+          fi
     - name: Copy new docker-compose file over ssh
       uses: appleboy/scp-action@v1
       with:
@@ -32,6 +38,11 @@ jobs:
         username: ${{ secrets.DB_SSH_USER }}
         key: ${{ secrets.DB_SSH_KEY }}
         script: |
-          cd kcidb-ng
-          docker compose pull
-          docker compose up -d --remove-orphans
+          set -euo pipefail
+          cd ~/kcidb-ng
+          test -f docker-compose.yaml || {
+            echo "Missing docker-compose.yaml in ~/kcidb-ng"
+            exit 1
+          }
+          docker compose -f docker-compose.yaml pull
+          docker compose -f docker-compose.yaml up -d --remove-orphans
