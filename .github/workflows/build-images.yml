@@ -16,6 +16,8 @@ jobs:
         include:
           - name: kcidb-rest
             dockerfile: Dockerfile.kcidb-rest-rs
+          - name: logspec-worker
+            dockerfile: Dockerfile.logspec-worker
     steps:
       - name: Checkout
         uses: actions/checkout@v4

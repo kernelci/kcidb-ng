@@ -65,26 +65,19 @@ services:
 #          - redis
 #      profiles: ["with_commands"]
 
-  # TODO: conver to image too, or move to dashboard
-#  logspec-worker:
-#    build:
-#      context: .
-#      dockerfile: Dockerfile.logspec-worker
-#    env_file:
-#      - .env
-#    volumes:
-#      - ./spool:/app/spool
-#      - ./cache:/cache
-#      - ./state:/app/state
-#      - ./config:/app/config
-#    command: ["python", "/app/logspec_worker.py", "--spool-dir", "/app/spool", "--config-file", "/app/logspec_worker.yaml"]
-#    restart: unless-stopped
-#    networks:
-#      - kcidb
-#      db:
-#        condition: service_healthy
-#      dbinit:
-#        condition: service_completed_successfully
+  logspec-worker:
+    image: ghcr.io/kernelci/kcidb-ng/logspec-worker:latest
+    env_file:
+      - .env
+    volumes:
+      - ./spool:/app/spool
+      - ./cache:/cache
+      - ./state:/app/state
+      - ./config:/app/config
+    command: ["python", "/app/logspec_worker.py", "--spool-dir", "/app/spool", "--config-file", "/app/logspec_worker.yaml"]
+    restart: unless-stopped
+    networks:
+      - kcidb
 
   db:
     image: postgres:17
