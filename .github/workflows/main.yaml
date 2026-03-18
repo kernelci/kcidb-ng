@@ -33,7 +33,7 @@ jobs:
         target: "/home/${{ secrets.DB_SSH_USER }}/kcidb-ng/"
     - name: Pull and start new instance over ssh
       uses: appleboy/ssh-action@v1
-        with:
+      with:
         host: ${{ secrets.DB_SSH_HOST }}
         username: ${{ secrets.DB_SSH_USER }}
         key: ${{ secrets.DB_SSH_KEY }}
