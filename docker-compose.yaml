@@ -58,6 +58,8 @@ services:
       environment:
           SKIP_CRONJOBS: "True"
       restart: always
+      ports:
+        - "2004:8001"
       networks:
         - kcidb
 
