@@ -8,6 +8,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+    - name: Validate docker-compose syntax
+      run: docker compose -f docker-compose.yaml config --quiet
     - name: Shutdown old instance over ssh
       uses: appleboy/ssh-action@v1
       with:
