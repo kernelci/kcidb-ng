@@ -36,7 +36,7 @@ services:
           - ./state:/app/state
           - ./cache:/app/cache
       restart: always
-      potrs:
+      ports:
         - "2003:8002"
       networks:
         - kcidb
