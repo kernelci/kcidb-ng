@@ -1,0 +1,116 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: kcidb-rest
+            dockerfile: Dockerfile.kcidb-rest-rs
+          - name: logspec-worker
+            dockerfile: Dockerfile.logspec-worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ghcr.io/kernelci/kcidb-ng/${{ matrix.name }}:latest
+            ghcr.io/kernelci/kcidb-ng/${{ matrix.name }}:${{ github.sha }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate docker-compose syntax
+        run: |
+          touch .env
+          docker compose -f docker-compose.yaml config --quiet
+
+      - name: Shutdown old instance over ssh
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DB_SSH_HOST }}
+          username: ${{ secrets.DB_SSH_USER }}
+          key: ${{ secrets.DB_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            if [ -d /home/${{ secrets.DB_SSH_USER }}/kcidb-ng ] && [ -f /home/${{ secrets.DB_SSH_USER }}/kcidb-ng/docker-compose.yaml ]; then
+              cd /home/${{ secrets.DB_SSH_USER }}/kcidb-ng
+              docker compose -f docker-compose.yaml down
+            else
+              echo "No existing deployment found in /home/${{ secrets.DB_SSH_USER }}/kcidb-ng."
+              exit 0
+            fi
+
+      - name: Copy new docker-compose file over ssh
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DB_SSH_HOST }}
+          username: ${{ secrets.DB_SSH_USER }}
+          key: ${{ secrets.DB_SSH_KEY }}
+          source: "docker-compose.yaml"
+          target: "/home/${{ secrets.DB_SSH_USER }}/kcidb-ng/"
+
+      - name: Pull and start new instance over ssh
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DB_SSH_HOST }}
+          username: ${{ secrets.DB_SSH_USER }}
+          key: ${{ secrets.DB_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /home/${{ secrets.DB_SSH_USER }}/kcidb-ng
+            test -f docker-compose.yaml || {
+              echo "Missing docker-compose.yaml in /home/${{ secrets.DB_SSH_USER }}/kcidb-ng"
+              exit 1
+            }
+            docker compose -f docker-compose.yaml pull
+            docker compose -f docker-compose.yaml up -d --remove-orphans
+
+            # Ensure Dozzle (Docker log viewer) is running with latest image
+            docker pull amir20/dozzle:latest || echo "WARNING: Failed to pull latest Dozzle image, using cached version"
+            if docker ps -q -f name=dozzle | grep -q .; then
+              echo "Dozzle is already running, restarting with latest image..."
+              docker stop dozzle
+              docker rm dozzle
+            elif docker ps -aq -f name=dozzle | grep -q .; then
+              echo "Dozzle container exists but is stopped, removing..."
+              docker rm dozzle
+            fi
+            docker run -d --name dozzle --restart unless-stopped \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -p 127.0.0.1:8080:8080 \
+              amir20/dozzle:latest
