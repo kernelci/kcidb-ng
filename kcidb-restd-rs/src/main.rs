@@ -38,6 +38,7 @@ use jsonwebtoken::{DecodingKey, Validation, decode};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::limit::RequestBodyLimitLayer;
@@ -67,6 +68,7 @@ struct SubmissionStatus {
 }
 
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 
 struct AppState {
     directory: String,
@@ -77,6 +79,32 @@ struct AppState {
     system_error_counter: AtomicU64,
     user_error_counter: AtomicU64,
     start_time: std::time::Instant,
+    origin_counters: Mutex<HashMap<String, u64>>,
+}
+
+/// Normalize origin name to be safe for Prometheus labels:
+/// lowercase, replace non-alphanumeric with underscore, collapse repeats
+fn normalize_origin(origin: &str) -> String {
+    let normalized: String = origin
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    // Collapse consecutive underscores
+    let mut result = String::with_capacity(normalized.len());
+    let mut prev_underscore = false;
+    for c in normalized.chars() {
+        if c == '_' {
+            if !prev_underscore {
+                result.push(c);
+            }
+            prev_underscore = true;
+        } else {
+            result.push(c);
+            prev_underscore = false;
+        }
+    }
+    result.trim_matches('_').to_string()
 }
 
 fn verify_submission_path(path: &str) -> bool {
@@ -149,6 +177,20 @@ async fn submission_metrics(
     );
     metrics.push_str("# TYPE kcidb_json_files gauge\n");
     metrics.push_str(&format!("kcidb_json_files {}\n", json_files_num));
+    // Per-origin submission counts
+    metrics.push_str("# HELP kcidb_submissions_by_origin Total submissions received per origin\n");
+    metrics.push_str("# TYPE kcidb_submissions_by_origin counter\n");
+    if let Ok(counters) = state.origin_counters.lock() {
+        let mut origins: Vec<(&String, &u64)> = counters.iter().collect();
+        origins.sort_by_key(|(k, _)| (*k).clone());
+        for (origin, count) in origins {
+            metrics.push_str(&format!(
+                "kcidb_submissions_by_origin{{origin=\"{}\"}} {}\n",
+                origin, count
+            ));
+        }
+    }
+
     // Uptime in seconds
     let uptime = state.start_time.elapsed().as_secs();
     metrics.push_str("# HELP kcidb_uptime_seconds Uptime of the server in seconds\n");
@@ -243,6 +285,7 @@ async fn main() {
         system_error_counter: AtomicU64::new(0),
         user_error_counter: AtomicU64::new(0),
         start_time: std::time::Instant::now(),
+        origin_counters: Mutex::new(HashMap::new()),
     });
     let tls_key: String;
     let tls_chain: String;
@@ -565,6 +608,11 @@ async fn receive_submission(
             state
                 .submission_size_total
                 .fetch_add(size as u64, Ordering::Relaxed);
+            // increment per-origin counter
+            let normalized = normalize_origin(&origin);
+            if let Ok(mut counters) = state.origin_counters.lock() {
+                *counters.entry(normalized).or_insert(0) += 1;
+            }
             println!("Submission status: {}", jsonstr);
             (StatusCode::OK, jsonstr)
         }
