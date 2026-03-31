@@ -204,10 +204,10 @@ def process_log(log_file, parser, start_state):
         magic = f.read(2)
         f.seek(0)
         if magic == b'\x1f\x8b':
-            with gzip.open(f, "rt", encoding="utf-8") as gz:
+            with gzip.open(f, "rt", encoding="utf-8", errors="replace") as gz:
                 log = gz.read()
         else:
-            log = f.read().decode("utf-8")
+            log = f.read().decode("utf-8", errors="replace")
 
     if not log:
         # If the log is empty, return an empty list
