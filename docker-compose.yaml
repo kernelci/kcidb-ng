@@ -64,6 +64,8 @@ services:
         - "2004:8001"
       networks:
         - kcidb
+      profiles:
+        - disabled
 
 #      depends_on:
 #          - redis
