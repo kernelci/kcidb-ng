@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import jwt
 import time
-import datetime
 import argparse
 import sys
 
@@ -18,10 +17,8 @@ def main():
     args = parse_args()
     now_unix = int(time.time())
     expiry_unix = now_unix + args.expiry_years * 365 * 24 * 60 * 60
-    gendate = datetime.datetime.fromtimestamp(now_unix).isoformat() + "Z"
     payload = {
         "origin": args.origin,
-        "gendate": gendate,
         "exp": expiry_unix,
     }
     if args.show_payload:
