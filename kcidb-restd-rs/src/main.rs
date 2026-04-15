@@ -58,6 +58,9 @@ struct Args {
     /// JWT secret
     #[clap(short, long, default_value = "secret")]
     jwt_secret: String,
+    /// Unified JWT secret (secondary, tried if primary fails)
+    #[clap(long, default_value = "")]
+    unified_secret: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -73,6 +76,7 @@ use std::sync::Mutex;
 struct AppState {
     directory: String,
     jwt_secret: String,
+    unified_secret: String,
     submission_counter: AtomicU64,
     submission_size_total: AtomicU64,
     error_counter: AtomicU64,
@@ -276,9 +280,11 @@ async fn main() {
     let limit_layer = RequestBodyLimitLayer::new(512 * 1024 * 1024);
     let args = Args::parse();
     let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| args.jwt_secret.clone());
+    let unified_secret = std::env::var("UNIFIED_SECRET").unwrap_or_else(|_| args.unified_secret.clone());
     let app_state = Arc::new(AppState {
         directory: args.directory,
         jwt_secret,
+        unified_secret,
         submission_counter: AtomicU64::new(0),
         submission_size_total: AtomicU64::new(0),
         error_counter: AtomicU64::new(0),
@@ -329,6 +335,9 @@ async fn main() {
     // if secret is empty, warn
     if app_state.jwt_secret.is_empty() {
         eprintln!("Warning: JWT secret is empty, disabling authentication");
+    }
+    if !app_state.unified_secret.is_empty() {
+        println!("Unified secret is configured");
     }
     let mut port = args.port;
 
@@ -420,7 +429,6 @@ fn verify_auth(headers: HeaderMap, state: Arc<AppState>) -> Result<JWT, String> 
         // If no secret, return a default JWT or handle as needed
         return Ok(JWT {
             origin: "none".to_string(),
-            gendate: "none".to_string(),
         });
     }
     let jwt_r = headers.get("Authorization");
@@ -441,7 +449,17 @@ fn verify_auth(headers: HeaderMap, state: Arc<AppState>) -> Result<JWT, String> 
     let jwt = verify_jwt(jwt_str, &state.jwt_secret);
     match jwt {
         Ok(jwt) => Ok(jwt),
-        Err(e) => Err(e.to_string()),
+        Err(e) => {
+            if !state.unified_secret.is_empty() {
+                let jwt2 = verify_jwt(jwt_str, &state.unified_secret);
+                match jwt2 {
+                    Ok(jwt) => Ok(jwt),
+                    Err(_) => Err(e.to_string()),
+                }
+            } else {
+                Err(e.to_string())
+            }
+        }
     }
 }
 
@@ -633,7 +651,6 @@ async fn receive_submission(
 #[derive(Debug, Serialize, Deserialize)]
 struct JWT {
     origin: String,
-    gendate: String,
 }
 
 fn verify_jwt(token: &str, secret: &str) -> Result<JWT, jsonwebtoken::errors::Error> {
@@ -644,9 +661,9 @@ fn verify_jwt(token: &str, secret: &str) -> Result<JWT, jsonwebtoken::errors::Er
 
 /* STUB for now */
 /*
-fn generate_jwt(origin: &str, gendate: &str, secret: &str) -> Result<String, jsonwebtoken::errors::Error> {
+fn generate_jwt(origin: &str, secret: &str) -> Result<String, jsonwebtoken::errors::Error> {
     let key = EncodingKey::from_secret(secret.as_bytes());
-    let token = encode(&Header::default(), &JWT { origin: origin.to_string(), gendate: gendate.to_string() }, &key)?;
+    let token = encode(&Header::default(), &JWT { origin: origin.to_string() }, &key)?;
     Ok(token)
 }
 */
