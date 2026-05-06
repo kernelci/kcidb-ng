@@ -655,7 +655,9 @@ struct JWT {
 
 fn verify_jwt(token: &str, secret: &str) -> Result<JWT, jsonwebtoken::errors::Error> {
     let key = DecodingKey::from_secret(secret.as_bytes());
-    let token = decode::<JWT>(token, &key, &Validation::default())?;
+    let mut validation = Validation::default();
+    validation.validate_aud = false;
+    let token = decode::<JWT>(token, &key, &validation)?;
     Ok(token.claims)
 }
 
