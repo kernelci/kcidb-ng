@@ -16,6 +16,12 @@ RUN cargo build --release
 # secondary image slim bookworm
 FROM debian:bookworm-slim
 
+# ca-certificates is required so the built-in ACME (Let's Encrypt) client can
+# verify TLS connections to the ACME server. bookworm-slim ships without it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=0 /app/target/release/kcidb-restd-rs /usr/local/bin/kcidb-restd-rs
 COPY --from=0 /app/static/index.html /usr/local/share/kcidb-restd-rs/index.html
 
