@@ -4,12 +4,16 @@ services:
     image: ghcr.io/kernelci/kcidb-ng/kcidb-rest:latest
     env_file:
       - .env
+    # Built-in ACME: set KCIDB_DOMAINS in .env and kcidb-rest obtains and
+    # auto-renews its own Let's Encrypt certificate into the ./certs volume.
+    # Both port 80 (HTTP-01 challenge) and 443 must be published for this.
     ports:
       - "443:443"
       - "80:80"
     volumes:
       - ./spool:/app/spool
       - ./certs:/etc/letsencrypt
+      # Deprecated: only needed for external certbot in webroot mode.
       # Uncomment to enable ACME challenge for certbot (also set ACME_WEBROOT in .env)
       # - ./acme-challenge:/var/www/acme-challenge
     restart: unless-stopped

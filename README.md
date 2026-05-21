@@ -81,6 +81,29 @@ PG_URI=postgresql:dbname=kcidb user=kcidb_editor password=kcidb host=db port=543
 JWT_SECRET=your_jwt_secret
 ```
 
+### TLS certificates (built-in ACME)
+
+`kcidb-rest` can obtain and automatically renew its own Let's Encrypt
+certificates. Set `KCIDB_DOMAINS` in `.env` to a comma-separated list of
+domains:
+
+```
+KCIDB_DOMAINS=db.example.org
+CERTBOT_EMAIL=admin@example.org   # ACME account contact (defaults to bot@kernelci.org)
+#ACME_STAGING=1                   # use the Let's Encrypt staging environment for testing
+```
+
+When `KCIDB_DOMAINS` is set, on startup the service validates that every
+domain resolves in DNS, requests a certificate over the HTTP-01 challenge
+(served on port 80), stores it under `/etc/letsencrypt/live/<domain>/`, and
+serves HTTPS on port 443. A background task renews the certificate when it is
+within 30 days of expiry and hot-reloads it without a restart. Both port 80
+and 443 must be published (they already are in `docker-compose.yaml`).
+
+If `KCIDB_DOMAINS` is not set, the service falls back to the deprecated
+external `certbot` integration (`CERTBOT_DOMAIN` / `ACME_WEBROOT`), or serves
+plain HTTP when no TLS is configured.
+
 ## Usage
 
 ### Starting the Services
