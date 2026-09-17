@@ -675,6 +675,13 @@ async fn submission_status(
         return (StatusCode::OK, jsanswer);
     }
 
+    submission_file = format!("{}/pending_retry/submission-{}.json", state.directory, id);
+    // check if the submission was deferred after a transient failure
+    if Path::new(&submission_file).exists() {
+        let jsanswer = generate_answer("retrying", id.as_str(), Some("File deferred after a transient failure, waiting for retry".to_string()));
+        return (StatusCode::OK, jsanswer);
+    }
+
     submission_file = format!("{}/failed/submission-{}.json", state.directory, id);
     // check if the failed file exists
     if Path::new(&submission_file).exists() {
