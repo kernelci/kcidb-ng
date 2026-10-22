@@ -1,6 +1,7 @@
 FROM alpine/git:latest AS fetcher
 
 WORKDIR /repo
+RUN apk add --no-cache ca-certificates
 RUN git clone --depth 1 --filter=blob:none --sparse https://github.com/kernelci/dashboard.git . && \
     git sparse-checkout set backend
 
@@ -12,6 +13,7 @@ ENV POETRY_NO_INTERACTION=1 \
     POETRY_CACHE_DIR=/tmp/poetry_cache
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     build-essential \
     libpq-dev \
     curl \
@@ -25,7 +27,8 @@ WORKDIR /app
 COPY --from=fetcher /repo/backend/pyproject.toml /repo/backend/poetry.lock ./
 
 RUN --mount=type=cache,target=$POETRY_CACHE_DIR \
-    poetry install --without dev --no-root
+    poetry install --without dev --no-root \
+    && poetry run pip install 'certifi>=2026.10.19'
 
 FROM python:3.12-slim AS runner
 
@@ -36,7 +39,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 && rm -rf /var/lib/apt/lists/*
+    ca-certificates libpq5 && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=fetcher /repo/backend /app

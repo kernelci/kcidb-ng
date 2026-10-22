@@ -11,7 +11,7 @@ RUN mkdir -p spool
 
 COPY kcidb-restd-rs/ .
 
-RUN cargo build --release
+RUN cargo build --release --locked
 
 # secondary image slim bookworm
 FROM debian:bookworm-slim
@@ -20,6 +20,7 @@ FROM debian:bookworm-slim
 # verify TLS connections to the ACME server. bookworm-slim ships without it.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' ca-certificates)" ge '20250419~deb12u2' \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=0 /app/target/release/kcidb-restd-rs /usr/local/bin/kcidb-restd-rs

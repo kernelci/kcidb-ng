@@ -2,7 +2,7 @@ FROM python:3.13-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y git
+RUN apt-get update && apt-get install -y ca-certificates git
 
 RUN git clone https://github.com/kernelci/kcidb.git && \
     cd kcidb && \
@@ -10,7 +10,7 @@ RUN git clone https://github.com/kernelci/kcidb.git && \
 
 RUN git clone https://github.com/kernelci/logspec.git && \
     cd logspec && \
-    pip install -e .
+    pip install -e . 'certifi>=2026.10.19'
 
 COPY logspec-worker/logspec_api.py /app/logspec_api.py
 COPY logspec-worker/logspec_worker.py /app/logspec_worker.py
