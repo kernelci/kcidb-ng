@@ -8,6 +8,7 @@ config/logspec_worker.yaml
 /target/
 **/*.rs.bk
 Cargo.lock
+!/kcidb-restd-rs/Cargo.lock
 
 # Python
 __pycache__/
