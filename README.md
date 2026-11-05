@@ -79,6 +79,8 @@ PS_PASS=kcidb
 PG_URI=postgresql:dbname=kcidb user=kcidb_editor password=kcidb host=db port=5432
 # JWT authentication
 JWT_SECRET=your_jwt_secret
+# Tag of ghcr.io/kernelci/dashboard/dashboard-backend (ingester + pending_aggregations_processor)
+#DASHBOARD_BACKEND_IMAGE_TAG=latest
 ```
 
 ### TLS certificates (built-in ACME)

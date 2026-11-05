@@ -22,7 +22,7 @@ services:
 # To disable JWT auth
 #    command: ["/usr/local/bin/kcidb-restd-rs","-j",""]
   ingester:
-      image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_OWNER:-kernelci}/${IMAGE_REPOSITORY:-dashboard}/dashboard-backend:${IMAGE_TAG:-latest}
+      image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_OWNER:-kernelci}/${IMAGE_REPOSITORY:-dashboard}/dashboard-backend:${DASHBOARD_BACKEND_IMAGE_TAG:-latest}
       command:
           - poetry
           - run
@@ -50,7 +50,7 @@ services:
 #      profiles: ["with_commands"]
 
   pending_aggregations_processor:
-      image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_OWNER:-kernelci}/${IMAGE_REPOSITORY:-dashboard}/dashboard-backend:${IMAGE_TAG:-latest}
+      image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_OWNER:-kernelci}/${IMAGE_REPOSITORY:-dashboard}/dashboard-backend:${DASHBOARD_BACKEND_IMAGE_TAG:-latest}
       command:
           - poetry
           - run

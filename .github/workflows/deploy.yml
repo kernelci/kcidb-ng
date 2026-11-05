@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      dashboard_backend_image_tag:
+        description: "Tag of ghcr.io/kernelci/dashboard/dashboard-backend to deploy (empty: latest)"
+        required: false
 
 permissions:
   contents: read
@@ -50,12 +54,21 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    env:
+      DASHBOARD_BACKEND_IMAGE_TAG: ${{ inputs.dashboard_backend_image_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Validate docker-compose syntax
+      - name: Validate docker-compose syntax and image tag
         run: |
+          case "$DASHBOARD_BACKEND_IMAGE_TAG" in
+            *[!A-Za-z0-9._-]*)
+              echo "Invalid image tag: $DASHBOARD_BACKEND_IMAGE_TAG"
+              exit 1
+              ;;
+          esac
+          docker manifest inspect "ghcr.io/kernelci/dashboard/dashboard-backend:${DASHBOARD_BACKEND_IMAGE_TAG:-latest}" >/dev/null
           touch .env
           docker compose -f docker-compose.yaml config --quiet
 
@@ -90,6 +103,7 @@ jobs:
           host: ${{ secrets.DB_SSH_HOST }}
           username: ${{ secrets.DB_SSH_USER }}
           key: ${{ secrets.DB_SSH_KEY }}
+          envs: DASHBOARD_BACKEND_IMAGE_TAG
           script: |
             set -euo pipefail
             cd /home/${{ secrets.DB_SSH_USER }}/kcidb-ng
